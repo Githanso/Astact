@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { BoardState, Coords, GamePhase, PlacedPiece, Player, PieceDefinition, SpecialAbility, CombatResult, Language, TimerPreset, TimerConfig, GameStats, OnlineStatus, RestartNotice } from './types';
+import { BoardState, Coords, GamePhase, PlacedPiece, Player, PieceDefinition, SpecialAbility, CombatResult, Language, TimerPreset, TimerConfig, GameStats, OnlineStatus, RestartNotice, GameOverReason, ConnectionNotice, RoomState } from './types';
 import { BOARD_ROWS, BOARD_COLS, LAKE_COORDS, FOREST_COORDS, PIECE_DEFINITIONS, createInitialPiecePool, PLAYERS, TIMER_PRESETS, TRANSLATIONS, MAX_MISSED_TURNS } from './constants';
 import Board from './components/Board';
 import SetupUI from './components/SetupUI';
@@ -12,9 +12,17 @@ import MenuSettingsModal from './components/MenuSettingsModal';
 import RestartNoticeModal from './components/RestartNoticeModal';
 import GameOverModal from './components/GameOverModal';
 import OnlineModal from './components/OnlineModal';
+import ConnectionBanner from './components/ConnectionBanner';
 import { soundManager } from './lib/soundFX';
 
-const createEmptyBoard = (): BoardState => {
+// Sunucudaki DISCONNECT_TIMEOUT_MS ile ayni: rakip donmezse oyun bu surenin
+// sonunda hukmen bitiyor. Sunucu roomState.disconnectTimeoutMs ile de bildiriyor;
+// bu sabit yalnizca o bilgi yokken (kendi baglantimiz koptugunda) kullaniliyor.
+const KOPMA_PENCERESI_MS = 60_000;
+const YENIDEN_BAGLANMA_ARALIGI_MS = 2_000;
+const MAX_YENIDEN_BAGLANMA = Math.ceil(KOPMA_PENCERESI_MS / YENIDEN_BAGLANMA_ARALIGI_MS);
+
+const createEmptyBoard =(): BoardState => {
     const board: BoardState = Array(BOARD_ROWS).fill(null).map(() => Array(BOARD_COLS).fill(null));
     LAKE_COORDS.forEach(coord => { board[coord.row][coord.col] = 'LAKE'; });
     return board;
@@ -68,11 +76,29 @@ const App: React.FC = () => {
     const [showRoomCode, setShowRoomCode] = useState<boolean>(false);
     const [isMenuSettingsOpen, setIsMenuSettingsOpen] = useState<boolean>(false);
     const [isWaitingOpponentSetup, setIsWaitingOpponentSetup] = useState<boolean>(false);
-    const [roomState, setRoomState] = useState<{ gamePhase: string; redPlayer: string | null; redConnected: boolean; redReady: boolean; bluePlayer: string | null; blueConnected: boolean; blueReady: boolean; } | null>(null);
+    const [roomState, setRoomState] = useState<RoomState | null>(null);
+    // Oyun sonu gerekcesi: ayni "kaybettin" ekrani bayrak dustugu icin mi yoksa
+    // baglanti geri gelmedigi icin mi cikiyor, metin buna gore degisiyor.
+    const [gameOverReason, setGameOverReason] = useState<GameOverReason>(null);
+    // Baglanti seridi. Kopma anindan itibaren geri sayim gosterir.
+    const [connectionNotice, setConnectionNotice] = useState<ConnectionNotice>(null);
+    const [connectionSec, setConnectionSec] = useState<number | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     // Yeniden baglanmada sunucunun bildirdigi KALAN tur suresi (saniye); faz efekti
     // tarafindan bir kez okunup temizlenir.
     const sunucuKalanRef = useRef<number | null>(null);
+    // Otomatik yeniden baglanma defteri.
+    const odaBilgisiRef = useRef<{ room: string; name: string } | null>(null);
+    const kastenAyrildiRef = useRef<boolean>(false);
+    const denemeSayisiRef = useRef<number>(0);
+    const yenidenBaglanTimerRef = useRef<number | null>(null);
+    // connectWs kendi onclose'undan kendini cagiriyor; dogrudan referans dongu olurdu.
+    const connectWsRef = useRef<((room: string, name: string) => WebSocket) | null>(null);
+    // onclose closure'i eski state'i gorur; guncel degerler ref'ten okunuyor.
+    const isOnlineModeRef = useRef<boolean>(false);
+    useEffect(() => { isOnlineModeRef.current = isOnlineMode; }, [isOnlineMode]);
+    const gamePhaseRef = useRef<GamePhase>('SETUP_RED');
+    useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
     const [stats, setStats] = useState<GameStats>({ gamesPlayed: 0, redWins: 0, blueWins: 0, totalBattles: 0, totalTurns: 0 });
     // Süresi dolduğu için kaçırılan tur sayısı (oyuncu başına, oyun boyunca birikimli).
     const [missedTurns, setMissedTurns] = useState<{ red: number; blue: number }>({ red: 0, blue: 0 });
@@ -103,17 +129,37 @@ const App: React.FC = () => {
         switch (msg.type) {
             case 'room_created': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); setShowRoomCode(true); break;
             case 'room_joined': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); if (msg.roomState?.gamePhase === 'SETUP') { setIsOnlineModalOpen(false); setGamePhase(msg.playerTeam === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); } break;
-            case 'room_error': setOnlineErrorMessage(TR_CODE(msg.code, msg.message)); break;
+            // Oda dolu / oyun devam ediyor gibi KALICI redler: yeniden baglanmayi
+            // burada durduruyoruz, yoksa istemci 2sn'de bir bosuna deneyip durur.
+            // Modal katilma denemesinde kapaniyor, hata metni ise onun icinde
+            // basiliyor — geri acilmazsa kullanici reddedildigini hic gormuyordu.
+            case 'room_error': setOnlineErrorMessage(TR_CODE(msg.code, msg.message)); kastenAyrildiRef.current = true; setIsOnlineModalOpen(true); break;
             // Rakip katildi — kod popup'ina artik gerek yok.
             case 'room_started_setup': setRoomState(msg.roomState); setIsOnlineModalOpen(false); setScreen('GAME'); setShowRoomCode(false); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
             case 'player_setup_status': setRoomState(prev => prev ? { ...prev, redReady: msg.redReady, blueReady: msg.blueReady } : prev); break;
             case 'both_setup_complete': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myPieces); mergeBoards(mb, msg.opponentPieces); setBoard(mb); setGamePhase(msg.gamePhase || 'PLAY_RED'); setIsWaitingOpponentSetup(false); setIsOnlineModalOpen(false); soundManager.playVictory(); confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); break; }
-            case 'game_state_restored': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (typeof msg.remainingMs === 'number') { const kalan = Math.max(0, Math.ceil(msg.remainingMs / 1000)); sunucuKalanRef.current = kalan; setTurnTimeRemaining(kalan); } setGamePhase(msg.gamePhase || 'PLAY_RED'); if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); } setOnlineErrorMessage(null); break; }
+            case 'game_state_restored': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (typeof msg.remainingMs === 'number') { const kalan = Math.max(0, Math.ceil(msg.remainingMs / 1000)); sunucuKalanRef.current = kalan; setTurnTimeRemaining(kalan); } if (msg.missedTurns) setMissedTurns(msg.missedTurns); setGamePhase(msg.gamePhase || 'PLAY_RED'); if (msg.gamePhase === 'GAME_OVER') { setWinner(msg.winner ?? null); setGameOverReason(msg.reason ?? null); setIsTimeoutDraw(msg.reason === 'TIMEOUT_DRAW'); setGamePhase('GAME_OVER'); } setOnlineErrorMessage(null); break; }
             // Tur suresini sunucu yurutuyor; sira degisimini o bildiriyor.
-            case 'turn_timeout': { setSelectedPiece(null); setValidMoves([]); if (msg.nextPhase) setGamePhase(msg.nextPhase); break; }
+            case 'turn_timeout': { setSelectedPiece(null); setValidMoves([]); if (msg.missedTurns) setMissedTurns(msg.missedTurns); if (msg.nextPhase) setGamePhase(msg.nextPhase); break; }
             case 'move_executed': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (msg.nextPhase) setGamePhase(msg.nextPhase); if (msg.combatResult) { const cr: CombatResult = { outcome: msg.combatResult.outcome as any, attacker: { name: msg.combatResult.attackerName || '???', rank: msg.combatResult.attackerRank ?? 0 } as any, defender: { name: msg.combatResult.defenderName || '???', rank: msg.combatResult.defenderRank ?? 0 } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); } if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } break; }
             case 'move_error': setOnlineErrorMessage(TR_CODE(msg.code, msg.message)); break;
-            case 'game_over': setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); break;
+            // Oyun sonu ARTIK uc kaynaktan gelebiliyor: bayrak dustu (FLAG), iki taraf
+            // da tur kacirma sinirina ulasti (TIMEOUT_DRAW), rakip geri donmedi
+            // (OPPONENT_LEFT). Konfeti yalnizca KAZANANA atiliyor — kaybedenin
+            // ekranina konfeti yagdirmak alay gibi duruyordu.
+            case 'game_over': {
+                setWinner(msg.winner ?? null);
+                setGameOverReason(msg.reason ?? null);
+                setIsTimeoutDraw(msg.reason === 'TIMEOUT_DRAW');
+                if (msg.missedTurns) setMissedTurns(msg.missedTurns);
+                setGamePhase('GAME_OVER');
+                setConnectionNotice(null);
+                soundManager.playVictory();
+                if (msg.winner && msg.winner === myOnlineTeamRef.current) {
+                    confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+                }
+                break;
+            }
             // Sunucu yeniden başlatmayı ancak İKİ taraf da isteyince yapıyor ve
             // restart_requested'ı isteği yapana da yolluyor. Kendi isteğimizi "rakip
             // istedi" diye göstermemek için slot karşılaştırılıyor.
@@ -127,23 +173,68 @@ const App: React.FC = () => {
                 setRestartNotice(msg.slot === benimSlot ? 'WAITING' : 'REQUESTED');
                 break;
             }
-            case 'player_connection_change': setRoomState(msg.roomState); break;
-            case 'game_restarted': setBoard(createEmptyBoard()); setSelectedPiece(null); setValidMoves([]); setPiecesToPlace(createInitialPiecePool()); setSelectedPieceToPlace(null); setWinner(null); setRedCaptured([]); setBlueCaptured([]); setCombatHistory([]); setIsWaitingOpponentSetup(false); setMissedTurns({ red: 0, blue: 0 }); setIsTimeoutDraw(false); setRestartNotice(null); setRoomState(msg.roomState); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
+            // Rakibin baglanti durumu degisti. Serit yalnizca OYUN SURERKEN anlamli:
+            // dizilim/lobi asamasinda rakibin yoklugunu zaten pano gosteriyor.
+            case 'player_connection_change': {
+                setRoomState(msg.roomState);
+                const benKirmizi = myOnlineTeamRef.current !== PLAYERS.BLUE;
+                const rakipBagli = benKirmizi ? msg.roomState?.blueConnected : msg.roomState?.redConnected;
+                const rakipKalanMs = benKirmizi ? msg.roomState?.blueDisconnectMs : msg.roomState?.redDisconnectMs;
+                const oyunSuruyor = typeof msg.roomState?.gamePhase === 'string' && msg.roomState.gamePhase.startsWith('PLAY');
+                if (!oyunSuruyor) { setConnectionNotice(null); setConnectionSec(null); break; }
+                if (rakipBagli === false) {
+                    setConnectionNotice('OPPONENT_GONE');
+                    setConnectionSec(typeof rakipKalanMs === 'number' ? Math.ceil(rakipKalanMs / 1000) : null);
+                } else {
+                    setConnectionNotice(prev => (prev === 'OPPONENT_GONE' ? 'OPPONENT_BACK' : prev));
+                    setConnectionSec(null);
+                }
+                break;
+            }
+            case 'game_restarted': setBoard(createEmptyBoard()); setSelectedPiece(null); setValidMoves([]); setPiecesToPlace(createInitialPiecePool()); setSelectedPieceToPlace(null); setWinner(null); setGameOverReason(null); setConnectionNotice(null); setConnectionSec(null); setRedCaptured([]); setBlueCaptured([]); setCombatHistory([]); setIsWaitingOpponentSetup(false); setMissedTurns({ red: 0, blue: 0 }); setIsTimeoutDraw(false); setRestartNotice(null); setRoomState(msg.roomState); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
         }
     }, []);
 
+    // Baglanti koptugunda OTOMATIK yeniden baglanilir. Sunucu ayni token'i gorunce
+    // oyuncuyu eski slotuna oturtup game_state_restored yolluyor, yani oyun kaldigi
+    // yerden devam ediyor. Denemeler DISCONNECT penceresi boyunca surer; o sure
+    // dolunca sunucu zaten oyunu hukmen bitiriyor, daha fazla denemenin anlami yok.
     const connectWs = useCallback((room: string, name: string) => {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         let token = localStorage.getItem('astact_player_token');
         if (!token) { token = crypto.randomUUID(); localStorage.setItem('astact_player_token', token); }
         const url = `${protocol}//${window.location.host}/ws/game-room?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&token=${encodeURIComponent(token)}`;
+        odaBilgisiRef.current = { room, name };
+        kastenAyrildiRef.current = false;
         const newWs = new WebSocket(url);
+        newWs.onopen = () => {
+            denemeSayisiRef.current = 0;
+            setOnlineErrorMessage(null);
+            setConnectionNotice(prev => (prev === 'SELF_GONE' ? 'SELF_BACK' : prev));
+            setConnectionSec(null);
+        };
         newWs.onmessage = (event) => { try { handleWsMessage(JSON.parse(event.data)); } catch (e) {} };
-        newWs.onclose = () => { if (isOnlineMode) setOnlineErrorMessage(TR_KEY('errConnectionLost')); };
+        newWs.onclose = () => {
+            // Odayi kendi istegiyle terk eden oyuncuyu geri sokmaya calisma.
+            if (kastenAyrildiRef.current || !isOnlineModeRef.current) return;
+            setOnlineErrorMessage(TR_KEY('errConnectionLost'));
+            // Oyun bittiyse geri sayimli "kaybedeceksin" uyarisi yaniltici olur.
+            if (gamePhaseRef.current.startsWith('PLAY')) {
+                setConnectionNotice('SELF_GONE');
+                setConnectionSec(prev => prev ?? Math.round(KOPMA_PENCERESI_MS / 1000));
+            }
+            if (denemeSayisiRef.current >= MAX_YENIDEN_BAGLANMA) return;
+            denemeSayisiRef.current++;
+            yenidenBaglanTimerRef.current = window.setTimeout(() => {
+                const bilgi = odaBilgisiRef.current;
+                if (bilgi && !kastenAyrildiRef.current) connectWsRef.current?.(bilgi.room, bilgi.name);
+            }, YENIDEN_BAGLANMA_ARALIGI_MS);
+        };
         newWs.onerror = () => { setOnlineErrorMessage(TR_KEY('errWsError')); };
         wsRef.current = newWs;
         return newWs;
-    }, [isOnlineMode]);
+    }, [TR_KEY]);
+    useEffect(() => { connectWsRef.current = connectWs; }, [connectWs]);
 
     const sendWsMessage = useCallback((msg: any) => { if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(msg)); }, []);
 
@@ -165,6 +256,10 @@ const App: React.FC = () => {
     };
 
     const handleLeaveOnlineRoom = () => {
+        // Kasitli ayrilma: onclose'daki otomatik yeniden baglanma devreye girmesin.
+        kastenAyrildiRef.current = true;
+        if (yenidenBaglanTimerRef.current !== null) { clearTimeout(yenidenBaglanTimerRef.current); yenidenBaglanTimerRef.current = null; }
+        setConnectionNotice(null); setConnectionSec(null); setGameOverReason(null);
         if (wsRef.current) wsRef.current.close();
         setIsOnlineMode(false); setRoomCode(null); setMyOnlineTeam(null); setRoomState(null);
         setIsOnlineModalOpen(false); setIsWaitingOpponentSetup(false); setRestartNotice(null); setShowRoomCode(false);
@@ -293,6 +388,21 @@ const App: React.FC = () => {
         setTurnTimeRemaining(sunucuKalan !== null ? sunucuKalan : timerConfig.turnTime);
     }, [gamePhase, timerConfig.turnTime]);
     useEffect(() => { if (lastCombatCoords) { const t = setTimeout(() => setLastCombatCoords(null), 700); return () => clearTimeout(t); } }, [lastCombatCoords]);
+
+    // Baglanti seridindeki geri sayim. Sifira inince beklemeye devam eder; oyunu
+    // bitirme karari SUNUCUNUN (alarm), istemci yalnizca gosteriyor.
+    useEffect(() => {
+        if (connectionNotice !== 'OPPONENT_GONE' && connectionNotice !== 'SELF_GONE') return;
+        const i = setInterval(() => setConnectionSec(p => (p === null || p <= 0 ? p : p - 1)), 1000);
+        return () => clearInterval(i);
+    }, [connectionNotice]);
+
+    // "Geri dondu" bildirimi kalici olmamali.
+    useEffect(() => {
+        if (connectionNotice !== 'OPPONENT_BACK' && connectionNotice !== 'SELF_BACK') return;
+        const t = setTimeout(() => setConnectionNotice(null), 4000);
+        return () => clearTimeout(t);
+    }, [connectionNotice]);
 
     const calculateValidMoves = useCallback((piece: PlacedPiece, currentBoard: BoardState): Coords[] => {
         const moves: Coords[] = []; const { row, col } = piece.position; if (!piece.movable) return [];
@@ -495,7 +605,10 @@ const App: React.FC = () => {
         <RoomCodeModal isOpen={showRoomCode} roomCode={roomCode} onClose={() => setShowRoomCode(false)} lang={lang} />
         {/* Oyun bittiginde bildirim GameOverModal'in ICINDE gosteriliyor; ayri bir popup
             ayni z-index'te ust uste binerdi. Diger tum durumlarda popup cikiyor. */}
-        <GameOverModal winner={winner} isTimeoutDraw={isTimeoutDraw} notice={gamePhase === 'GAME_OVER' ? oyunSonuBildirimi : null} gamePhase={gamePhase} onRestart={handleRestartGame} lang={lang} onClose={() => setGamePhase('SETUP_RED')} />
+        {/* Serit oyun sonu ekraninin ALTINDA kalir (z-900 < z-1000): oyun bittiginde
+            baglanti uyarisi degil sonuc onemli. */}
+        <ConnectionBanner notice={gamePhase === 'GAME_OVER' ? null : connectionNotice} remainingSec={connectionSec} lang={lang} />
+        <GameOverModal winner={winner} isTimeoutDraw={isTimeoutDraw} myTeam={isOnlineMode ? myOnlineTeam : null} reason={gameOverReason} notice={gamePhase === 'GAME_OVER' ? oyunSonuBildirimi : null} gamePhase={gamePhase} onRestart={handleRestartGame} lang={lang} onClose={() => setGamePhase('SETUP_RED')} />
         {gamePhase !== 'GAME_OVER' && (
             <RestartNoticeModal notice={restartNotice} onConfirm={handleRestartGame} onClose={() => setRestartNotice(null)} lang={lang} />
         )}

@@ -59,6 +59,24 @@ export type OnlineStatus =
   | 'OPPONENT_TURN'
   | null;
 
+// Oyunun neden bittigi (sunucudaki GameOverReason ile ayni). Ekrandaki metin buna
+// gore secilir: bayrakla kazanmak ile rakip ayrildigi icin kazanmak ayni sey degil.
+export type GameOverReason = 'FLAG' | 'TIMEOUT_DRAW' | 'OPPONENT_LEFT' | null;
+
+// Baglanti seridinin hali. 'OPPONENT_GONE' / 'SELF_GONE' geri sayim gosterir,
+// '*_BACK' kisa sureli "geri dondu" bildirimidir.
+export type ConnectionNotice = 'OPPONENT_GONE' | 'OPPONENT_BACK' | 'SELF_GONE' | 'SELF_BACK' | null;
+
+// Sunucunun getRoomState() ciktisi.
+export interface RoomState {
+  gamePhase: string;
+  redPlayer: string | null; redConnected: boolean; redReady: boolean;
+  bluePlayer: string | null; blueConnected: boolean; blueReady: boolean;
+  // Kopan oyuncunun donmesi icin kalan sure (ms); bagliysa null.
+  redDisconnectMs?: number | null; blueDisconnectMs?: number | null;
+  disconnectTimeoutMs?: number;
+}
+
 export type TerrainType = 'LAKE' | 'FOREST' | null;
 
 export type SquareState = PlacedPiece | 'LAKE' | 'FOREST' | null;
