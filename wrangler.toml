@@ -1,0 +1,19 @@
+name = "astact"
+main = "src/server.ts"
+compatibility_date = "2025-09-01"
+
+# Statik dosyalar (index.html, oyun bundle'i, muzik).
+# Eslesmeyen yollar Worker'a duser -> /ws/game-room ve /api/game-room/create.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+# ONEMLI: Workers ucretsiz planinda yalnizca SQLite tabanli Durable Object
+# destekleniyor; bu yuzden new_classes degil new_sqlite_classes kullaniliyor.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]

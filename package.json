@@ -1,0 +1,23 @@
+{
+  "name": "astact",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "clean:assets": "node -e \"const fs=require('fs'),p='public/assets';if(fs.existsSync(p))for(const f of fs.readdirSync(p))fs.rmSync(p+'/'+f,{recursive:true,force:true})\"",
+    "build:client": "npm run clean:assets && npm --prefix client run build",
+    "test:protokol": "node test/protokol-testi.mjs",
+    "test:i18n": "node test/i18n-denetim.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260722.1",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.0.0"
+  },
+  "allowScripts": {
+    "workerd@1.20260722.1": true,
+    "esbuild@0.28.1": true
+  }
+}
