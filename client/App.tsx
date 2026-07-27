@@ -70,6 +70,9 @@ const App: React.FC = () => {
     const [isWaitingOpponentSetup, setIsWaitingOpponentSetup] = useState<boolean>(false);
     const [roomState, setRoomState] = useState<{ gamePhase: string; redPlayer: string | null; redConnected: boolean; redReady: boolean; bluePlayer: string | null; blueConnected: boolean; blueReady: boolean; } | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
+    // Yeniden baglanmada sunucunun bildirdigi KALAN tur suresi (saniye); faz efekti
+    // tarafindan bir kez okunup temizlenir.
+    const sunucuKalanRef = useRef<number | null>(null);
     const [stats, setStats] = useState<GameStats>({ gamesPlayed: 0, redWins: 0, blueWins: 0, totalBattles: 0, totalTurns: 0 });
     // Süresi dolduğu için kaçırılan tur sayısı (oyuncu başına, oyun boyunca birikimli).
     const [missedTurns, setMissedTurns] = useState<{ red: number; blue: number }>({ red: 0, blue: 0 });
@@ -105,7 +108,9 @@ const App: React.FC = () => {
             case 'room_started_setup': setRoomState(msg.roomState); setIsOnlineModalOpen(false); setScreen('GAME'); setShowRoomCode(false); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
             case 'player_setup_status': setRoomState(prev => prev ? { ...prev, redReady: msg.redReady, blueReady: msg.blueReady } : prev); break;
             case 'both_setup_complete': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myPieces); mergeBoards(mb, msg.opponentPieces); setBoard(mb); setGamePhase(msg.gamePhase || 'PLAY_RED'); setIsWaitingOpponentSetup(false); setIsOnlineModalOpen(false); soundManager.playVictory(); confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); break; }
-            case 'game_state_restored': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); setGamePhase(msg.gamePhase || 'PLAY_RED'); if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); } setOnlineErrorMessage(null); break; }
+            case 'game_state_restored': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (typeof msg.remainingMs === 'number') { const kalan = Math.max(0, Math.ceil(msg.remainingMs / 1000)); sunucuKalanRef.current = kalan; setTurnTimeRemaining(kalan); } setGamePhase(msg.gamePhase || 'PLAY_RED'); if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); } setOnlineErrorMessage(null); break; }
+            // Tur suresini sunucu yurutuyor; sira degisimini o bildiriyor.
+            case 'turn_timeout': { setSelectedPiece(null); setValidMoves([]); if (msg.nextPhase) setGamePhase(msg.nextPhase); break; }
             case 'move_executed': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (msg.nextPhase) setGamePhase(msg.nextPhase); if (msg.combatResult) { const cr: CombatResult = { outcome: msg.combatResult.outcome as any, attacker: { name: msg.combatResult.attackerName || '???', rank: msg.combatResult.attackerRank ?? 0 } as any, defender: { name: msg.combatResult.defenderName || '???', rank: msg.combatResult.defenderRank ?? 0 } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); } if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } break; }
             case 'move_error': setOnlineErrorMessage(TR_CODE(msg.code, msg.message)); break;
             case 'game_over': setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); break;
@@ -169,19 +174,29 @@ const App: React.FC = () => {
         setScreen('MENU');
     };
 
-    // Muzik, logo ekrana gelir gelmez baslasin. Tarayicilar kullanici jesti oncesi
-    // autoplay'i engelleyebiliyor, bu yuzden iki asamali:
-    //   1) acilista HEMEN dene — daha once siteyle etkilesmis ziyaretcide calisir
-    //      (Chrome'un Media Engagement Index'i izin verir), muzik logoyla birlikte girer,
-    //   2) engellenirse ilk kullanici etkilesiminde basla. Dinleyiciler `once`,
-    //      startBackgroundMusic zaten caliyorsa hemen donuyor, yani cift calma olmaz.
+    // Muzik, logo ekrana gelir gelmez baslasin. HICBIR tarayici sesli autoplay'i
+    // garanti etmez (jest olmadan bloklanir), bu yuzden uc asamali:
+    //   1) acilista SESLI dene — izin varsa (Chrome MEI, site ses izni) muzik
+    //      logoyla birlikte, hicbir etkilesim olmadan girer,
+    //   2) reddedilirse SESSIZ baslat (bu her yerde serbest) — muzik zaten calmaya
+    //      basladigi icin ilk jestte play() izni beklenmez, sadece muted=false yapilir,
+    //   3) o ilk jestte sesi ac. Dinleyiciler `once`; unmuteBackgroundMusic zaten
+    //      sesli caliyorsa is yapmadan donuyor, yani cift calma olmaz.
     // Ses kapaliysa (kullanici sustur demisse) yedek yol hic devreye girmez.
     useEffect(() => {
         soundManager.setVolume(volume);
-        const basla = () => { if (soundManager.volume > 0) soundManager.startBackgroundMusic(); };
-        const olaylar: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart'];
+        const basla = () => soundManager.unmuteBackgroundMusic();
+        const olaylar: (keyof WindowEventMap)[] = ['pointerdown', 'pointerup', 'keydown', 'touchstart', 'click', 'scroll'];
         olaylar.forEach(o => window.addEventListener(o, basla, { once: true }));
-        return () => olaylar.forEach(o => window.removeEventListener(o, basla));
+        // Arka planda acilan sekmede autoplay her halukarda reddedilir; sekme one
+        // gelince yeniden denemek gerekiyor (bu tek basina jest sayilmaz ama
+        // 1. asamanin izinli oldugu durumu kurtarir).
+        const gorunurluk = () => { if (!document.hidden) soundManager.unmuteBackgroundMusic(); };
+        document.addEventListener('visibilitychange', gorunurluk);
+        return () => {
+            olaylar.forEach(o => window.removeEventListener(o, basla));
+            document.removeEventListener('visibilitychange', gorunurluk);
+        };
         // Yalnizca acilista: sonraki ses degisiklikleri handleVolumeChange'den geciyor.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -249,14 +264,11 @@ const App: React.FC = () => {
         setTurnTimeRemaining(timerConfig.turnTime);
         setSelectedPiece(null); setValidMoves([]);
 
-        // Online modda tur saati SUNUCUDA yok — geri sayım tamamen istemcide. İstemcinin
-        // oyunu kendi başına bitirmesi sunucuyu "oyun sürüyor" durumunda bırakır; oyuncu
-        // biten bir ekranda kilitli kalır. Bu yüzden kaçırma sayımı ve beraberlik
-        // YALNIZCA yerel (aynı ekran) modda işler.
-        if (isOnlineMode) {
-            setGamePhase(sirasiGecen === PLAYERS.RED ? 'PLAY_BLUE' : 'PLAY_RED');
-            return;
-        }
+        // Online modda tur saatini SUNUCU yürütür (server.ts alarm()) ve süre dolunca
+        // `turn_timeout` yayınlar. İstemci sırayı KENDİ ÇEVİRMEZ: çevirdiğinde sunucu
+        // hâlâ eski sırada kalıyor, ekranda "sıra sende" yazarken hamleler
+        // NOT_YOUR_TURN ile reddediliyordu. Buradaki geri sayım yalnızca görsel.
+        if (isOnlineMode) return;
 
         const yeniSayac = sirasiGecen === PLAYERS.RED
             ? { red: missedTurns.red + 1, blue: missedTurns.blue }
@@ -271,7 +283,15 @@ const App: React.FC = () => {
         }
     }, [turnTimeRemaining, gamePhase, missedTurns, timerConfig.turnTime, isOnlineMode]);
 
-    useEffect(() => { setTurnTimeRemaining(timerConfig.turnTime); }, [gamePhase, timerConfig.turnTime]);
+    // Faz degisince geri sayim bastan baslar. Tek istisna yeniden baglanma: sunucu
+    // turun KALAN suresini bildirir (game_state_restored.remainingMs) ve tur ortasindan
+    // devam edilmesi gerekir. Ref kullaniliyor cunku bu efekt setGamePhase'den SONRA
+    // calisip dogrudan yazilan degeri ezerdi.
+    useEffect(() => {
+        const sunucuKalan = sunucuKalanRef.current;
+        sunucuKalanRef.current = null;
+        setTurnTimeRemaining(sunucuKalan !== null ? sunucuKalan : timerConfig.turnTime);
+    }, [gamePhase, timerConfig.turnTime]);
     useEffect(() => { if (lastCombatCoords) { const t = setTimeout(() => setLastCombatCoords(null), 700); return () => clearTimeout(t); } }, [lastCombatCoords]);
 
     const calculateValidMoves = useCallback((piece: PlacedPiece, currentBoard: BoardState): Coords[] => {
@@ -386,7 +406,8 @@ const App: React.FC = () => {
         if (isOnlineMode && wsRef.current?.readyState === WebSocket.OPEN && roomCode && myOnlineTeam) {
             const placedPieces: PlacedPiece[] = []; const isRed = myOnlineTeam === PLAYERS.RED; const cols = isRed ? [7, 8, 9, 10] : [0, 1, 2, 3];
             for (const c of cols) for (let r = 0; r < BOARD_ROWS; r++) { const s = board[r][c]; if (s && typeof s === 'object' && s.owner === myOnlineTeam) placedPieces.push(s); }
-            sendWsMessage({ type: 'setup_complete', roomCode, team: myOnlineTeam, placedPieces }); setIsWaitingOpponentSetup(true); return;
+            // turnTime'i sunucu tur saatini kurarken kullanir; oda kurucusununki gecerli olur.
+            sendWsMessage({ type: 'setup_complete', roomCode, team: myOnlineTeam, placedPieces, turnTime: timerConfig.turnTime }); setIsWaitingOpponentSetup(true); return;
         }
         if (gamePhase === 'SETUP_RED') { setGamePhase('SETUP_BLUE'); setPiecesToPlace(createInitialPiecePool()); setSelectedPieceToPlace(null); }
         else if (gamePhase === 'SETUP_BLUE') { setGamePhase('PLAY_RED'); soundManager.playVictory(); confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); }

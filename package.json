@@ -9,7 +9,8 @@
     "clean:assets": "node -e \"const fs=require('fs'),p='public/assets';if(fs.existsSync(p))for(const f of fs.readdirSync(p))fs.rmSync(p+'/'+f,{recursive:true,force:true})\"",
     "build:client": "npm run clean:assets && npm --prefix client run build",
     "test:protokol": "node test/protokol-testi.mjs",
-    "test:i18n": "node test/i18n-denetim.mjs"
+    "test:i18n": "node test/i18n-denetim.mjs",
+    "test:tur-saati": "node test/tur-saati-testi.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260722.1",

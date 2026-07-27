@@ -30,6 +30,14 @@ npm run build:client   # client/ -> public/ (index.html + assets/)
 npm run dev            # http://127.0.0.1:8787
 npm run typecheck
 npm run test:protokol  # dev sunucusu ayaktayken
+npm run test:tur-saati # dev sunucusu ayaktayken, ~35sn surer (tur saatini bekliyor)
+```
+
+Testler varsayilan olarak `ws://127.0.0.1:8787`'e baglanir; canliya karsi kosmak icin
+`ASTACT_WS` verin:
+
+```bash
+ASTACT_WS=wss://astact.<hesap>.workers.dev/ws/game-room npm run test:tur-saati
 ```
 
 **Uyarı:** Yol içinde `&` karakteri olan bir klasörde (`C:\Users\Design&Motion\...` gibi)

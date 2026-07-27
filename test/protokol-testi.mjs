@@ -2,7 +2,7 @@
 //   Mavi (2. Oyuncu): 0-3. sutunlar, saga ilerler (dc > 0)
 //   Kirmizi (1. Oyuncu): 7-10. sutunlar, sola ilerler (dc < 0)
 //   Goller: 1,2,7,8. satirlar x 4,5,6. sutunlar
-const BASE = "ws://127.0.0.1:8787/ws/game-room";
+const BASE = process.env.ASTACT_WS || "ws://127.0.0.1:8787/ws/game-room";
 
 const log = (who, ...a) => console.log(`[${who}]`, ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
