@@ -1,0 +1,12 @@
+# Satir sonlarini repoda LF'e sabitle. Windows'ta core.autocrlf=true oldugu icin
+# calisma kopyasinda CRLF gorunur, repoda LF durur — platformlar arasi tutarlilik.
+* text=auto eol=lf
+
+# Ikili dosyalar: git'in sezgisine birakma, acikca isaretle.
+# Yanlis sezgi bir mp3'u satir sonu donusumuyle bozar.
+*.mp3 binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.avif binary
+*.ico binary
