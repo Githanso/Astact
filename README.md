@@ -767,6 +767,40 @@ yardımcısı eklendi — yalnızca **görünen etiket** çevriliyor, kimlik Tü
 `lang`, `Board → Square → Piece` zincirinden geçirildi; `SetupUI` zaten alıyordu.
 `Piece.tsx`'te sabit yazılmış "Bayrak" / "Bomba" etiketleri de tabloya bağlandı.
 
+### "Taş bulunamadı" yağmuru — hamleden sonra seçim temizlenmiyordu
+
+Belirtiler: hamle yaptıktan sonra sarı "gidebileceğin kareler" işaretleri ekranda **takılı
+kalıyor**, sonraki tıklamalar sık sık "Taş bulunamadı" veriyor, ve sıra rakipteyken tahtaya
+basınca **hiçbir şey olmuyor**.
+
+Üçü de tek kök nedene bağlı. `move_executed` işleyicisi `selectedPiece` ve `validMoves`'u
+temizlemiyordu:
+
+| Hamlenin bittiği yol | Seçimi temizliyor mu |
+|---|---|
+| `turn_timeout` | ✅ |
+| `game_restarted` | ✅ |
+| yerel mod `handleMoveOrAttack` | ✅ |
+| **`move_executed` (online)** | ❌ — atlanmış |
+
+Sonuç zinciri: seçim ayakta kalınca sarı işaretler ekranda kalıyor; `selectedPiece.position`
+ise taşın **eski** karesini göstermeye devam ediyor. O takılı karelerden birine tıklandığında
+`handleSquareClick` onu hâlâ geçerli hamle sanıp `handleMoveOrAttack`'e gidiyor ve sunucuya
+`from` olarak artık **boş** olan kareyi yolluyor → `PIECE_NOT_FOUND` → "Taş bulunamadı".
+
+Üçüncü belirtinin sebebi ayrı ama aynı kafa karışıklığını üretiyordu: sıra rakipteyken
+`handleSquareClick` ilk satırda **sessizce** `return` ediyordu. Oyuncu tıklıyor, hiçbir şey
+olmuyor, sebebini de göremiyor. Artık aynı şerit "Sıra rakibinizde." diyor (metin, sunucunun
+`NOT_YOUR_TURN` kodu için zaten tanımlı olan çeviriden geliyor; yeni anahtar eklenmedi).
+
+`game_state_restored` da temizliyor: yeniden bağlanmada tahta baştan kuruluyor, eldeki seçim
+orada da bayat.
+
+**Bu hata yeni değildi, yalnızca görünür oldu.** `move_error` daha önce kapalı modalın içine
+yazıldığı için reddedilen hamleler sessizce düşüyordu; şerit eklenince aynı hata her
+seferinde ekrana geldi. Tarayıcı doğrulamasında bunu bir kez ben de yaşayıp "çift gönderim
+yarışı" diye yanlış yorumlamıştım.
+
 ### Hamlenin nereye yapıldığı görünmüyordu
 
 Rakip oynadığında tahtada ne değiştiğini fark etmek zordu: sade hamlelerde hiçbir işaret

@@ -165,7 +165,8 @@ const App: React.FC = () => {
             case 'room_started_setup': setRoomState(msg.roomState); setIsOnlineModalOpen(false); setScreen('GAME'); setShowRoomCode(false); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
             case 'player_setup_status': setRoomState(prev => prev ? { ...prev, redReady: msg.redReady, blueReady: msg.blueReady } : prev); break;
             case 'both_setup_complete': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myPieces); mergeBoards(mb, msg.opponentPieces); setBoard(mb); setGamePhase(msg.gamePhase || 'PLAY_RED'); setIsWaitingOpponentSetup(false); setIsOnlineModalOpen(false); soundManager.playVictory(); confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); break; }
-            case 'game_state_restored': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (typeof msg.remainingMs === 'number') { const kalan = Math.max(0, Math.ceil(msg.remainingMs / 1000)); sunucuKalanRef.current = kalan; setTurnTimeRemaining(kalan); } if (msg.missedTurns) setMissedTurns(msg.missedTurns); setGamePhase(msg.gamePhase || 'PLAY_RED'); if (msg.gamePhase === 'GAME_OVER') { setWinner(msg.winner ?? null); setGameOverReason(msg.reason ?? null); setIsTimeoutDraw(msg.reason === 'TIMEOUT_DRAW'); setGamePhase('GAME_OVER'); } setOnlineErrorMessage(null); break; }
+            // Yeniden baglanmada tahta bastan kuruluyor; eldeki secim de bayat.
+            case 'game_state_restored': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); setSelectedPiece(null); setValidMoves([]); if (typeof msg.remainingMs === 'number') { const kalan = Math.max(0, Math.ceil(msg.remainingMs / 1000)); sunucuKalanRef.current = kalan; setTurnTimeRemaining(kalan); } if (msg.missedTurns) setMissedTurns(msg.missedTurns); setGamePhase(msg.gamePhase || 'PLAY_RED'); if (msg.gamePhase === 'GAME_OVER') { setWinner(msg.winner ?? null); setGameOverReason(msg.reason ?? null); setIsTimeoutDraw(msg.reason === 'TIMEOUT_DRAW'); setGamePhase('GAME_OVER'); } setOnlineErrorMessage(null); break; }
             // Tur suresini sunucu yurutuyor; sira degisimini o bildiriyor.
             case 'turn_timeout': { setSelectedPiece(null); setValidMoves([]); if (msg.missedTurns) setMissedTurns(msg.missedTurns); if (msg.nextPhase) setGamePhase(msg.nextPhase); break; }
             // Sunucudan gelen carpisma sonucu, panonun bekledigi CombatResult'a
@@ -177,7 +178,14 @@ const App: React.FC = () => {
             //
             // Rutbe BILINCE null birakiliyor, 0'a cevrilmiyor: 0 gercek bir rutbe
             // (Bayrak) ve ormanda gizlenen tasi "Rutbe 0" diye gosteriyordu.
-            case 'move_executed': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (msg.nextPhase) setGamePhase(msg.nextPhase); const saldiranTakim: Player = msg.attackerTeam === PLAYERS.BLUE ? PLAYERS.BLUE : PLAYERS.RED; if (msg.to) setLastMove({ coords: { row: msg.to.row, col: msg.to.col }, owner: saldiranTakim }); if (msg.combatResult) { const c = msg.combatResult; const savunanTakim: Player = saldiranTakim === PLAYERS.RED ? PLAYERS.BLUE : PLAYERS.RED; const cr: CombatResult = { outcome: c.outcome as any, attacker: { name: c.attackerName || '???', rank: c.attackerRank ?? null, special: c.attackerSpecial ?? null, owner: saldiranTakim } as any, defender: { name: c.defenderName || (c.outcome === 'GAME_OVER' ? 'Bayrak' : '???'), rank: c.defenderRank ?? null, owner: savunanTakim } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); } if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } break; }
+            // Hamle onaylandi -> SECIM SIFIRLANMALI. Sifirlanmadiginda:
+            //   1) sari "gidebilecegin kareler" isaretleri ekranda takili kaliyor,
+            //   2) selectedPiece.position tasin ESKI karesini gostermeye devam ediyor;
+            //      o takili karelerden birine tiklayinca istemci `from` olarak artik
+            //      BOS olan kareyi yolluyor ve sunucu "Tas bulunamadi" ile reddediyor.
+            // Hamle biten diger tum yollar (turn_timeout, game_restarted, yerel mod)
+            // zaten temizliyordu; atlanan tek yer buydu.
+            case 'move_executed': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); setSelectedPiece(null); setValidMoves([]); if (msg.nextPhase) setGamePhase(msg.nextPhase); const saldiranTakim: Player = msg.attackerTeam === PLAYERS.BLUE ? PLAYERS.BLUE : PLAYERS.RED; if (msg.to) setLastMove({ coords: { row: msg.to.row, col: msg.to.col }, owner: saldiranTakim }); if (msg.combatResult) { const c = msg.combatResult; const savunanTakim: Player = saldiranTakim === PLAYERS.RED ? PLAYERS.BLUE : PLAYERS.RED; const cr: CombatResult = { outcome: c.outcome as any, attacker: { name: c.attackerName || '???', rank: c.attackerRank ?? null, special: c.attackerSpecial ?? null, owner: saldiranTakim } as any, defender: { name: c.defenderName || (c.outcome === 'GAME_OVER' ? 'Bayrak' : '???'), rank: c.defenderRank ?? null, owner: savunanTakim } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); } if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } break; }
             // Hamle hatasi ARTIK onlineErrorMessage'a yazilmiyor: o alan yalnizca
             // OnlineModal icinde basiliyor, oyun sirasinda o modal kapali oldugu icin
             // red gorunmuyordu (bkz. MoveErrorToast). Ustelik metin orada takili
@@ -550,7 +558,13 @@ const App: React.FC = () => {
     };
 
     const handleSquareClick = (coords: Coords) => {
-        if (isOnlineMode && myOnlineTeam && gamePhase.startsWith('PLAY') && currentPlayer !== myOnlineTeam) return;
+        // Sira rakipteyken tiklama YOK SAYILIYORDU — sessizce. Oyuncu tahtaya
+        // basiyor, hicbir sey olmuyor, sebebini de goremiyordu. Artik ayni serit
+        // "Sira rakibinizde." diyor (metin sunucudaki kodla ayni anahtardan geliyor).
+        if (isOnlineMode && myOnlineTeam && gamePhase.startsWith('PLAY') && currentPlayer !== myOnlineTeam) {
+            setMoveError(prev => ({ metin: TR_CODE('NOT_YOUR_TURN'), no: (prev?.no ?? 0) + 1 }));
+            return;
+        }
         if (gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') {
             const ap = (isOnlineMode && myOnlineTeam) ? myOnlineTeam : currentPlayer; if (!ap) return;
             const isRed = ap === PLAYERS.RED;
