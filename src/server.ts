@@ -13,6 +13,9 @@ interface PieceData {
   id: string; name: string; rank: number; owner: Player;
   special: string | null; movable: boolean; revealed: boolean; hasMoved: boolean;
   row: number; col: number;
+  // Izci gorevini kullandi mi. Her Izci omrunde BIR kez dusman tasi acabiliyor;
+  // bayrak tas basina tutuluyor, oyuncu basina degil.
+  scoutUsed?: boolean;
 }
 
 interface StoredPlayer {
@@ -200,8 +203,11 @@ export class GameRoom extends DurableObject {
     const board: any[][] = Array(BOARD_ROWS).fill(null).map(() => Array(BOARD_COLS).fill(null));
     LAKE_COORDS.forEach(l => { board[l.row][l.col] = "LAKE"; });
     for (const p of pieces) {
+      // scoutUsed YALNIZCA kendi taslarimizda gonderiliyor: istemci "bu Izci
+      // gorevini kullandi mi" bilgisini arayuzde gostermek icin kullaniyor.
+      // Rakibe sizarsa hangi Izcinin kullanildigi bilgisi ele verilirdi.
       board[p.row][p.col] = isOwn || p.revealed
-        ? { id: p.id, name: p.name, rank: p.rank, owner: p.owner, special: p.special, movable: p.movable, revealed: p.revealed, hasMoved: p.hasMoved, position: { row: p.row, col: p.col } }
+        ? { id: p.id, name: p.name, rank: p.rank, owner: p.owner, special: p.special, movable: p.movable, revealed: p.revealed, hasMoved: p.hasMoved, position: { row: p.row, col: p.col }, ...(isOwn ? { scoutUsed: !!p.scoutUsed } : {}) }
         : { owner: p.owner, revealed: false, position: { row: p.row, col: p.col } };
     }
     for (let r = 0; r < BOARD_ROWS; r++) for (let c = 0; c < BOARD_COLS; c++) if (board[r][c] === null && isForest(r, c)) board[r][c] = "FOREST";
@@ -355,7 +361,7 @@ export class GameRoom extends DurableObject {
           room.players[playerSlot]!.ready = true;
           room.players[playerSlot]!.pieces = (msg.placedPieces || []).map((p: any) => ({
             id: p.id, name: p.name, rank: p.rank, owner: p.owner,
-            special: p.special || null, movable: p.movable !== false, revealed: false, hasMoved: false,
+            special: p.special || null, movable: p.movable !== false, revealed: false, hasMoved: false, scoutUsed: false,
             row: p.position.row, col: p.position.col,
           }));
           // Tur suresini oda kurucusu (slot 0) belirler; iki oyuncu farkli preset
@@ -436,6 +442,67 @@ export class GameRoom extends DurableObject {
           this.sendTo(0, { ...base, combatResult: carpismaGorunumu(isP0), myBoard: this.buildBoardView(p0, true), opponentBoard: this.buildBoardView(p1, false) });
           this.sendTo(1, { ...base, combatResult: carpismaGorunumu(!isP0), myBoard: this.buildBoardView(p1, true), opponentBoard: this.buildBoardView(p0, false) });
           if (newWinner) { this.broadcast({ type: "game_over", winner: newWinner, reason: "FLAG" as GameOverReason }); }
+          await this.saveRoom();
+          await this.scheduleAlarm();
+          break;
+        }
+        // ─── Izci gorevi: dusman hattindaki bir tasin kimligini ac ─────────────
+        //
+        // Kurallar:
+        //   - Yalnizca Izci (special === "SCOUT") ve omrunde BIR kez.
+        //   - Hedef, Izci ile AYNI SATIRDA ve dusmanin dizilim sutunlarinda olmali.
+        //   - Izci ile hedef arasinda GOL varsa gorus kapali ("onunde gol varsa").
+        //   - Hedef ORMAN karesindeyse kimligi gorunmez; orman zaten "ustunde
+        //     duranin kimligini gizler" kuralina sahip, gorme yetenegi onu delmiyor.
+        //   - Kullanim TURU HARCAR: hamle yerine gecer, sira karsiya doner.
+        //
+        // Acilan tas `revealed` ile isaretleniyor. Bu bayrak yalnizca RAKIBIN
+        // gorunumunu etkiliyor (buildBoardView isOwn=true her seyi gosterir), yani
+        // tasin sahibi tasinin desifre oldugunu FARK ETMEZ — istihbarat gizli kalir.
+        // Tas yenilince zaten listeden dusuyor, "yenilene kadar gorunur" kendiliginden.
+        case "scout": {
+          const yolla = (code: string) => { try { ws.send(JSON.stringify({ type: "move_error", code })); } catch (e) {} };
+          if (room.gamePhase === "PLAY_RED" && playerSlot !== 0) { yolla("NOT_YOUR_TURN"); return; }
+          if (room.gamePhase === "PLAY_BLUE" && playerSlot !== 1) { yolla("NOT_YOUR_TURN"); return; }
+          if (!isPlayPhase(room.gamePhase)) { yolla("NOT_YOUR_TURN"); return; }
+          const { from, target } = msg;
+          if (!from || !target) { yolla("INVALID_MOVE"); return; }
+          const player = room.players[playerSlot]!;
+          const opponent = room.players[playerSlot === 0 ? 1 : 0]!;
+          const izci = player.pieces.find(p => p.row === from.row && p.col === from.col);
+          if (!izci) { yolla("PIECE_NOT_FOUND"); return; }
+          if (izci.special !== "SCOUT") { yolla("SCOUT_NOT_SCOUT"); return; }
+          if (izci.scoutUsed) { yolla("SCOUT_USED"); return; }
+          // Hedef: Izci ile AYNI SATIRDAKI herhangi bir dusman tasi. Sutun sinirlamasi
+          // YOK — dusmanin dizilim sutunlariyla sinirlasaydik orman kurali olu kod
+          // olurdu (orman kareleri yalnizca 4-6. sutunlarda, dizilim bolgeleri 0-3 ve
+          // 7-10). Tarafsiz banda ilerlemis tasin kimligini acabilmek de yetenegin
+          // asil degeri; menzili gol kesiyor, orman gizliyor.
+          if (target.row !== izci.row) { yolla("SCOUT_RANGE"); return; }
+          const hedef = opponent.pieces.find(p => p.row === target.row && p.col === target.col);
+          if (!hedef) { yolla("SCOUT_RANGE"); return; }
+          // Aradaki kareler: iki sutun arasinda kalanlar (uc noktalar haric).
+          const adim = target.col > izci.col ? 1 : -1;
+          for (let c = izci.col + adim; c !== target.col; c += adim) {
+            if (isLake(izci.row, c)) { yolla("SCOUT_LAKE"); return; }
+          }
+          if (isForest(hedef.row, hedef.col)) { yolla("SCOUT_FOREST"); return; }
+
+          izci.scoutUsed = true;
+          hedef.revealed = true;
+          room.gamePhase = room.gamePhase === "PLAY_RED" ? "PLAY_BLUE" : "PLAY_RED";
+          room.turnStartedAt = Date.now();
+          const sp0 = room.players[0]!.pieces, sp1 = room.players[1]!.pieces;
+          // DIKKAT: hedefin koordinati YALNIZCA gorevi yapana gidiyor. Iki tarafa da
+          // yollasaydik kurban hangi tasinin desifre oldugunu ogrenir ve onu geri
+          // cekerdi — istihbaratin degeri gizli kalmasinda.
+          // Rakip yine de turun gectigini gormeli, o yuzden faz/saat ona da gidiyor;
+          // hamle yapilmadigini zaten tahtadan anlayacak, bu kacinilmaz.
+          const sOrtak = { type: "scout_done", nextPhase: room.gamePhase, turnTimeMs: room.turnTimeMs, remainingMs: this.turnRemainingMs() };
+          const sGizli = { scout: { row: izci.row, col: izci.col }, target: { row: hedef.row, col: hedef.col }, byTeam: player.team };
+          const bakanSlot = playerSlot;
+          this.sendTo(0, { ...sOrtak, ...(bakanSlot === 0 ? sGizli : {}), myBoard: this.buildBoardView(sp0, true), opponentBoard: this.buildBoardView(sp1, false) });
+          this.sendTo(1, { ...sOrtak, ...(bakanSlot === 1 ? sGizli : {}), myBoard: this.buildBoardView(sp1, true), opponentBoard: this.buildBoardView(sp0, false) });
           await this.saveRoom();
           await this.scheduleAlarm();
           break;

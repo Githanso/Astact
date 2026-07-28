@@ -193,6 +193,19 @@ const App: React.FC = () => {
             // hala duruyordu. Oda seviyesindeki hatalar (room_error) orada kalmaya
             // devam ediyor, onlar zaten modalin konusu.
             case 'move_error': setMoveError(prev => ({ metin: TR_CODE(msg.code, msg.message), no: (prev?.no ?? 0) + 1 })); break;
+            // Izci gorevi sonucu. Tahta bastan kuruluyor: acilan tas artik rakip
+            // gorunumunde ad/rutbe ile geliyor. Gorev TUR HARCIYOR, o yuzden faz da
+            // degisiyor. Halka animasyonu ACILAN karede donuyor — hamle olmasa da
+            // "burada bir sey oldu" geri bildirimi ayni dille veriliyor.
+            case 'scout_done': {
+                const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb);
+                setSelectedPiece(null); setValidMoves([]);
+                if (msg.nextPhase) setGamePhase(msg.nextPhase);
+                const bakan: Player = msg.byTeam === PLAYERS.BLUE ? PLAYERS.BLUE : PLAYERS.RED;
+                if (msg.target) setLastMove({ coords: { row: msg.target.row, col: msg.target.col }, owner: bakan });
+                soundManager.playSelect();
+                break;
+            }
             // Oyun sonu ARTIK uc kaynaktan gelebiliyor: bayrak dustu (FLAG), iki taraf
             // da tur kacirma sinirina ulasti (TIMEOUT_DRAW), rakip geri donmedi
             // (OPPONENT_LEFT). Konfeti yalnizca KAZANANA atiliyor — kaybedenin
@@ -461,6 +474,32 @@ const App: React.FC = () => {
         return () => clearTimeout(t);
     }, [moveError?.no]);
 
+    // Izci gorevinin secilebilir hedefleri. Kural: AYNI SATIRDA, dusmanin dizilim
+    // sutunlarinda, arada gol yok, hedef ormanda degil. Sunucu hepsini yeniden
+    // dogruluyor (src/server.ts "scout") — buradaki hesap yalnizca hangi karelerin
+    // tiklanabilir oldugunu GOSTERMEK icin; istemciye guvenilmiyor.
+    const scoutTargets = useMemo<Coords[]>(() => {
+        if (!isOnlineMode || !myOnlineTeam || !selectedPiece) return [];
+        if (!gamePhase.startsWith('PLAY') || currentPlayer !== myOnlineTeam) return [];
+        if (selectedPiece.special !== SpecialAbility.SCOUT || selectedPiece.scoutUsed) return [];
+        const r = selectedPiece.position.row, izciCol = selectedPiece.position.col;
+        const hedefler: Coords[] = [];
+        // Satirin TAMAMI taraniyor: hedef dusmanin dizilim sutunlarinda olmak
+        // zorunda degil, tarafsiz banda ilerlemis tas da secilebilir.
+        for (let c = 0; c < BOARD_COLS; c++) {
+            const kare = board[r]?.[c];
+            if (!kare || typeof kare !== 'object' || kare.owner === myOnlineTeam) continue;
+            if (FOREST_COORDS.some(f => f.row === r && f.col === c)) continue;
+            const adim = c > izciCol ? 1 : -1;
+            let engel = false;
+            for (let x = izciCol + adim; x !== c; x += adim) {
+                if (LAKE_COORDS.some(l => l.row === r && l.col === x)) { engel = true; break; }
+            }
+            if (!engel) hedefler.push({ row: r, col: c });
+        }
+        return hedefler;
+    }, [isOnlineMode, myOnlineTeam, selectedPiece, gamePhase, currentPlayer, board]);
+
     // Baglanti seridindeki geri sayim. Sifira inince beklemeye devam eder; oyunu
     // bitirme karari SUNUCUNUN (alarm), istemci yalnizca gosteriyor.
     useEffect(() => {
@@ -575,6 +614,13 @@ const App: React.FC = () => {
                 handlePiecePlacement(coords);
             } return;
         }
+        // Izci gorevi hamleden ONCE bakiliyor: hedefler dusman bolgesinde, gecerli
+        // hamle kareleriyle cakismiyor, yani sira onemli degil ama niyet net olsun.
+        if (selectedPiece && scoutTargets.some(t => t.row === coords.row && t.col === coords.col)) {
+            sendWsMessage({ type: 'scout', from: selectedPiece.position, to: coords, target: coords });
+            setSelectedPiece(null); setValidMoves([]);
+            return;
+        }
         if (selectedPiece && validMoves.length > 0) { const tm = validMoves.find(m => m.row === coords.row && m.col === coords.col); if (tm) { handleMoveOrAttack(coords); return; } }
         const cs = board[coords.row][coords.col]; if (cs && typeof cs === 'object' && cs.owner === currentPlayer) { setSelectedPiece(cs); setValidMoves(calculateValidMoves(cs, board)); } else { setSelectedPiece(null); setValidMoves([]); }
     };
@@ -666,7 +712,7 @@ const App: React.FC = () => {
                 Sabitler: baslik + main dolgusu (online modda baslik bir satir daha uzun),
                 +32px = ust/alt koordinat seritleri, 1.1 = 11/10 en-boy orani. */}
             <div className={`relative flex-grow w-full flex items-center justify-center ${tahtaGenislikSiniri}`}>
-                <Board board={board} onSquareClick={handleSquareClick} onDropAction={handleDragDrop} highlightedPiece={pieceToSwap || selectedPiece} validMoves={validMoves} currentPlayer={currentPlayer} perspectivePlayer={isOnlineMode ? myOnlineTeam : currentPlayer} lastCombatCoords={lastCombatCoords} lastMove={lastMove} lang={lang} />
+                <Board board={board} onSquareClick={handleSquareClick} onDropAction={handleDragDrop} highlightedPiece={pieceToSwap || selectedPiece} validMoves={validMoves} currentPlayer={currentPlayer} perspectivePlayer={isOnlineMode ? myOnlineTeam : currentPlayer} lastCombatCoords={lastCombatCoords} lastMove={lastMove} scoutTargets={scoutTargets} lang={lang} />
                 {(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && (
                     <div className={`absolute top-1/2 -translate-y-1/2 z-30 w-72 max-w-[85%] ${setupSide === 'left' ? 'left-3' : 'right-3'}`}>
                         <SetupUI piecesToPlace={piecesToPlace} selectedPieceName={selectedPieceToPlace?.name} onPieceSelect={setSelectedPieceToPlace} onAutoSetup={handleAutoSetup} onClearSetup={handleClearSetup} onFinishSetup={handleReady} isWaitingOpponent={isWaitingOpponentSetup} lang={lang} player={setupPlayer} />

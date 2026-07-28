@@ -35,6 +35,7 @@ npm run test:oyun-sonu # dev sunucusu ayaktayken, ~2dk (beraberlik + kopma pence
 npm run test:oda-ayar  # dev sunucusu ayaktayken, ~50sn (tur suresi senkronu + oda omru)
 npm run test:yeniden-baslat # dev sunucusu ayaktayken, ~2.5dk (rovans akisi + sayac sifirlama)
 npm run test:carpisma  # dev sunucusu ayaktayken, ~1dk (carpisma kurallari + bilgi sizintisi)
+npm run test:izci      # dev sunucusu ayaktayken, ~20sn (Izci gorevi + istihbarat gizliligi)
 ```
 
 Testler varsayilan olarak `ws://127.0.0.1:8787`'e baglanir; canliya karsi kosmak icin
@@ -800,6 +801,47 @@ orada da bayat.
 yazıldığı için reddedilen hamleler sessizce düşüyordu; şerit eklenince aynı hata her
 seferinde ekrana geldi. Tarayıcı doğrulamasında bunu bir kez ben de yaşayıp "çift gönderim
 yarışı" diye yanlış yorumlamıştım.
+
+### İzci görevi: düşman taşının kimliğini açma
+
+Taş sayıları değişti: **İzci 4→2, Er 4→5, Bomba 3→4.** Net değişim sıfır — dizilim alanı
+tam 40 kare olduğu için `PIECE_COUNTS` toplamı **40'ta kalmak zorunda**, bir taşı artırırken
+başkasını azaltmak şart.
+
+İzci artık sıradan bir rütbe-2 taşı değil, sınırlı bir **istihbarat** kaynağı. Kurallar
+(`src/server.ts` → `case "scout"`):
+
+| Kural | Davranış |
+|---|---|
+| Kim | Yalnızca İzci (`special === 'SCOUT'`) |
+| Kaç kez | Her İzci ömründe **bir** kez (`scoutUsed`, taş başına) |
+| Hedef | İzci ile **aynı satırdaki** herhangi bir düşman taşı |
+| Göl | İzci ile hedef arasında göl varsa görüş kapalı |
+| Orman | Hedef orman karesindeyse kimliği görülemez |
+| Bedel | Görev **turu harcar** — hamle yerine geçer |
+| Süre | Açılan taş oyun bitene ya da yenilene kadar açık kalır |
+
+**Menzil sütunla sınırlanmadı, çünkü sınırlansaydı orman kuralı ölü kod olurdu.** İlk
+uygulamada hedefi düşmanın dizilim sütunlarına (0-3 / 7-10) kısıtlamıştım; orman kareleri
+ise yalnızca 4-6. sütunlarda. Menzil kontrolü orman kontrolüne sıra gelmeden reddediyordu,
+yani `SCOUT_FOREST` dalına hiç girilemiyordu. Kural "aynı satırdaki herhangi bir düşman
+taşı" olunca hem orman anlam kazanıyor hem de tarafsız banda ilerlemiş taşın kimliği
+açılabiliyor — yeteneğin asıl değeri orada.
+
+**İstihbarat gizli.** Açılan taşın koordinatı `scout_done` içinde **yalnızca görevi yapana**
+gidiyor. Rakip de mesajı alıyor (turun geçtiğini bilmeli) ama `target`/`scout` alanları ona
+gönderilmiyor — gönderilseydi kurban hangi taşının deşifre olduğunu öğrenip onu geri çeker,
+istihbaratın bütün değeri kaçardı. Taşın `revealed` bayrağı da kurbanın görünümünü
+değiştirmiyor: `buildBoardView(isOwn=true)` zaten her şeyi gösteriyor, yani sahibi taşının
+deşifre olduğunu fark etmiyor. `scoutUsed` de aynı sebeple yalnızca kendi taşlarımızda
+gönderiliyor.
+
+Arayüzde hedefler **camgöbeği + göz ikonu** ile işaretli; hamle kareleri kehribar. İkisi aynı
+renk olsaydı oyuncu saldırı sanıp turunu harcayabilirdi.
+
+**Belirtilmemiş olup benim karar verdiğim iki nokta:** görevin tur harcaması ve her İzci'nin
+bunu bir kez yapabilmesi. Gerekçe: bedeli olmasaydı oyunun ilk iki turunda iki İzci de
+kullanılır, karar kalmazdı. İkisi de tek satırlık değişiklikle gevşetilebilir.
 
 ### Hamlenin nereye yapıldığı görünmüyordu
 

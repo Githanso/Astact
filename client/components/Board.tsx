@@ -15,6 +15,8 @@ interface BoardProps {
     lastCombatCoords?: Coords | null;
     // Son hamlenin INDIGI kare ve onu oynayan takim; o karede halka animasyonu doner.
     lastMove?: { coords: Coords; owner: Player } | null;
+    // Secili Izci'nin gorebilecegi dusman kareleri (hamle degil, istihbarat hedefi).
+    scoutTargets?: Coords[];
 }
 
 // Kenar koordinatlari: HER IKI oyuncunun dizilimi ayni anda gosterilir; her oyuncu
@@ -50,7 +52,7 @@ const rankStrip = (keyPrefix: string, labels: string[]) => (
     </div>
 );
 
-const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highlightedPiece, validMoves, currentPlayer, perspectivePlayer, lang, lastCombatCoords, lastMove }) => {
+const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highlightedPiece, validMoves, currentPlayer, perspectivePlayer, lang, lastCombatCoords, lastMove, scoutTargets = [] }) => {
     return (
         <div className="w-full max-w-[900px] mx-auto flex flex-col items-center">
             {/* ust harf seridi — solda/sagda sayi seritleri kadar bosluk birakilir */}
@@ -86,6 +88,7 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highl
                                 lang={lang}
                                 isCombatSquare={!!lastCombatCoords && lastCombatCoords.row === rowIndex && lastCombatCoords.col === colIndex}
                                 rippleOwner={lastMove && lastMove.coords.row === rowIndex && lastMove.coords.col === colIndex ? lastMove.owner : null}
+                                isScoutTarget={scoutTargets.some(t => t.row === rowIndex && t.col === colIndex)}
                                 isForest={!!forestMatch}
                                 forestDensity={forestMatch?.density || 2}
                             />

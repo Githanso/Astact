@@ -86,7 +86,9 @@ export const PIECE_LABELS: Record<Language, Record<string, string>> = {
 export const getPieceLabel = (name: string, lang: Language): string =>
   PIECE_LABELS[lang]?.[name] ?? PIECE_LABELS.TR[name] ?? name;
 
-// Total 40 pieces per player (4 rows x 10 columns = 40 squares)
+// Oyuncu basina TAM 40 tas — dizilim alani 4 sutun x 10 satir = 40 kare, bosluk
+// birakmiyor. Bu tablonun toplami DEGISMEMELI; bir tasi artirirken digerini
+// azaltmak sart (Izci 4->2 karsiliginda Er ve Bomba +1 alindi).
 export const PIECE_COUNTS: { [key: string]: number } = {
   'Mareşal': 1,
   'General': 1,
@@ -96,11 +98,13 @@ export const PIECE_COUNTS: { [key: string]: number } = {
   'Üsteğmen': 4,
   'Teğmen': 4,
   'Astsubay': 4,
-  'Er': 4,
-  'İzci': 4,
+  'Er': 5,
+  // Izci sayisi 2: artik hareket eden bir tas degil, sinirli bir ISTIHBARAT
+  // kaynagi (her Izci omrunde bir kez dusman tasi acar, bkz. server.ts "scout").
+  'İzci': 2,
   'İstihkamcı': 4,
   'Casus': 1,
-  'Bomba': 3, // 3 Mayın
+  'Bomba': 4, // 4 Mayın
   'Bayrak': 1,
 };
 
@@ -222,6 +226,11 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     errSTRAIGHT_ONLY: 'Sadece düz hareket edilebilir.', errOUT_OF_BOUNDS: 'Tahta dışına çıkılamaz.',
     errLAKE: 'Göl üzerine gidilemez.', errOWN_PIECE: 'Orada kendi taşınız var.',
     errSERVER_ERROR: 'Sunucu hatası.', errROOM_FULL: 'Oda dolu veya oyun çoktan başladı.',
+    errSCOUT_NOT_SCOUT: 'Bu görevi yalnızca İzci yapabilir.',
+    errSCOUT_USED: 'Bu İzci görevini zaten kullandı.',
+    errSCOUT_RANGE: 'İzci yalnızca kendi satırındaki düşman taşını görebilir.',
+    errSCOUT_LAKE: 'Önünde göl var — görüş kapalı.',
+    errSCOUT_FOREST: 'Ormandaki taşın kimliği görülemez.',
     winnerLabel: 'Kazanan', youBadge: '(Siz)',
     victoryHeading: 'ZAFER!', defeatHeading: 'YENİLDİN',
     victoryFlag: 'Rakibin bayrağını ele geçirdin. Cephe senin!',
@@ -325,6 +334,11 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     errSTRAIGHT_ONLY: 'Only straight moves are allowed.', errOUT_OF_BOUNDS: 'Cannot move off the board.',
     errLAKE: 'Cannot move onto a lake.', errOWN_PIECE: 'Your own piece is there.',
     errSERVER_ERROR: 'Server error.', errROOM_FULL: 'The room is full or the game already started.',
+    errSCOUT_NOT_SCOUT: 'Only the Scout can do this.',
+    errSCOUT_USED: 'This Scout has already used its mission.',
+    errSCOUT_RANGE: 'The Scout can only see an enemy piece on its own row.',
+    errSCOUT_LAKE: 'A lake blocks the line of sight.',
+    errSCOUT_FOREST: 'A piece in the forest cannot be identified.',
     winnerLabel: 'Winner', youBadge: '(You)',
     victoryHeading: 'VICTORY!', defeatHeading: 'DEFEATED',
     victoryFlag: 'You captured the enemy flag. The field is yours!',
@@ -428,6 +442,11 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     errSTRAIGHT_ONLY: '直線移動のみ可能です。', errOUT_OF_BOUNDS: '盤外には出られません。',
     errLAKE: '湖には入れません。', errOWN_PIECE: 'そこには自分の駒があります。',
     errSERVER_ERROR: 'サーバーエラー。', errROOM_FULL: '部屋が満員か、ゲームがすでに開始しています。',
+    errSCOUT_NOT_SCOUT: 'これができるのは斥候だけです。',
+    errSCOUT_USED: 'この斥候は任務を使い切りました。',
+    errSCOUT_RANGE: '斥候は同じ行の敵の駒しか見られません。',
+    errSCOUT_LAKE: '湖に遮られて視界がありません。',
+    errSCOUT_FOREST: '森の中の駒は識別できません。',
     winnerLabel: '勝者', youBadge: '（あなた）',
     victoryHeading: '勝利！', defeatHeading: '敗北',
     victoryFlag: '敵の旗を奪取した。戦場は君のものだ！',
@@ -531,6 +550,11 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     errSTRAIGHT_ONLY: '직선 이동만 가능합니다.', errOUT_OF_BOUNDS: '판 밖으로 나갈 수 없습니다.',
     errLAKE: '호수로는 갈 수 없습니다.', errOWN_PIECE: '거기에는 아군 기물이 있습니다.',
     errSERVER_ERROR: '서버 오류.', errROOM_FULL: '방이 가득 찼거나 게임이 이미 시작되었습니다.',
+    errSCOUT_NOT_SCOUT: '이 임무는 정찰병만 수행할 수 있습니다.',
+    errSCOUT_USED: '이 정찰병은 이미 임무를 사용했습니다.',
+    errSCOUT_RANGE: '정찰병은 같은 행의 적 기물만 볼 수 있습니다.',
+    errSCOUT_LAKE: '호수에 가로막혀 시야가 없습니다.',
+    errSCOUT_FOREST: '숲에 있는 기물은 식별할 수 없습니다.',
     winnerLabel: '승자', youBadge: '(나)',
     victoryHeading: '승리!', defeatHeading: '패배',
     victoryFlag: '적의 깃발을 빼앗았습니다. 전장은 당신의 것입니다!',

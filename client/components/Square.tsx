@@ -1,5 +1,6 @@
 import React from 'react';
 import { Coords, Player, SquareState , Language } from '../types';
+import { Eye } from 'lucide-react';
 import { PLAYERS } from '../constants';
 import Piece from './Piece';
 import ForestOverlay from './ForestOverlay';
@@ -22,6 +23,9 @@ interface SquareProps {
     // tasiyor: halka o takimin rengini aliyor, boylece kimin oynadigi da belli
     // oluyor. null = halka yok.
     rippleOwner?: Player | null;
+    // Secili Izci bu dusman tasini gorebilir. Hamle isaretinden AYRI renk: tiklama
+    // sonucu farkli (tas alinmaz, kimligi acilir) ve karisirsa oyuncu tur harcar.
+    isScoutTarget?: boolean;
 }
 
 const Square: React.FC<SquareProps> = ({ 
@@ -37,7 +41,8 @@ const Square: React.FC<SquareProps> = ({
     forestDensity = 2,
     lang,
     isCombatSquare = false,
-    rippleOwner = null
+    rippleOwner = null,
+    isScoutTarget = false
 }) => {
     let content = null;
     const activeViewPlayer = perspectivePlayer || currentPlayer;
@@ -115,6 +120,14 @@ const Square: React.FC<SquareProps> = ({
             
             {isSelectedHighlight && (
                 <div className="absolute inset-0 ring-4 ring-amber-300 bg-amber-500/20 z-30 pointer-events-none animate-pulse"></div>
+            )}
+
+            {/* Izci hedefi: hamle isaretleri kehribar, bu CAMGOBEGI. Ayni renkte
+                olsalardi oyuncu saldiri sanip tur harcayabilirdi. */}
+            {isScoutTarget && (
+                <div className="absolute inset-0 ring-2 ring-cyan-300 bg-cyan-400/25 z-20 flex items-center justify-center pointer-events-none animate-pulse">
+                    <Eye className="w-4 h-4 text-cyan-200 drop-shadow" />
+                </div>
             )}
 
             {/* Hamle halkasi. Kapsayicida overflow-hidden YOK: cember kareden tasarak

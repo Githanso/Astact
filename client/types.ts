@@ -34,6 +34,9 @@ export interface PlacedPiece {
   position: Coords;
   revealed: boolean;
   hasMoved: boolean;
+  // Izci gorevini kullandi mi. Sunucu bunu YALNIZCA kendi taslarimizda gonderiyor;
+  // rakip Izcilerinde tanimsiz kalir (hangisinin kullanildigini ele vermemek icin).
+  scoutUsed?: boolean;
 }
 
 export interface Coords {
