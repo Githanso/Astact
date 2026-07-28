@@ -40,6 +40,10 @@ interface RoomData {
   // Iki oyuncu da sinira ulasirsa oyun berabere biter — kimse oynamiyorsa masa
   // sonsuza kadar acik kalmasin diye.
   missedTurns: [number, number];
+  // Oyunun bittigi an. Biten odalar depoda suresiz durmasin diye ROOM_TTL_MS
+  // sonra siliniyor; bu sure oyunculara sonucu gorup "yeniden baslat" demeleri
+  // icin birakiliyor. Yeniden baslatilinca null'a doner.
+  gameOverAt: number | null;
 }
 
 // Oyunun neden bittigi. Istemci ekrandaki metni buna gore seciyor; "kazandin"
@@ -76,6 +80,9 @@ const DEFAULT_TURN_TIME_MS = 35_000;
 const MIN_TURN_TIME_MS = 5_000, MAX_TURN_TIME_MS = 600_000;
 // Istemcideki constants.ts MAX_MISSED_TURNS ile AYNI olmali.
 const MAX_MISSED_TURNS = 3;
+// Biten oyunun odasi bu sure sonra siliniyor. Oyunculara sonucu gorup yeniden
+// baslatmalari icin makul bir pencere; sonrasinda oda depoda yer kaplamasin.
+const ROOM_TTL_MS = 10 * 60_000;
 function isPlayPhase(phase: RoomData["gamePhase"]): boolean {
   return phase === "PLAY_RED" || phase === "PLAY_BLUE";
 }
@@ -96,6 +103,7 @@ export class GameRoom extends DurableObject {
         if (stored.turnStartedAt === undefined) stored.turnStartedAt = isPlayPhase(stored.gamePhase) ? Date.now() : null;
         if (!Array.isArray(stored.missedTurns)) stored.missedTurns = [0, 0];
         if (stored.gameOverReason === undefined) stored.gameOverReason = stored.winner ? "FLAG" : null;
+        if (stored.gameOverAt === undefined) stored.gameOverAt = stored.gamePhase === "GAME_OVER" ? Date.now() : null;
         this.room = stored;
       }
     }
@@ -136,6 +144,7 @@ export class GameRoom extends DurableObject {
       if (r.disconnectedAt[i] !== null) deadlines.push(r.disconnectedAt[i]! + DISCONNECT_TIMEOUT_MS);
     }
     if (r.turnStartedAt !== null && isPlayPhase(r.gamePhase)) deadlines.push(r.turnStartedAt + r.turnTimeMs);
+    if (r.gameOverAt !== null && r.gamePhase === "GAME_OVER") deadlines.push(r.gameOverAt + ROOM_TTL_MS);
     if (deadlines.length === 0) { await this.ctx.storage.deleteAlarm(); return; }
     await this.ctx.storage.setAlarm(Math.min(...deadlines));
   }
@@ -171,6 +180,9 @@ export class GameRoom extends DurableObject {
       bluePlayer: r.players[1]?.name || null, blueConnected: connected.has(1) && r.disconnectedAt[1] === null, blueReady: !!r.players[1]?.ready,
       redDisconnectMs: kalan(0), blueDisconnectMs: kalan(1),
       disconnectTimeoutMs: DISCONNECT_TIMEOUT_MS,
+      // Tur suresini oda kurucusu belirliyor; katilan oyuncu daha odaya girerken
+      // gercek degeri gormeli, yoksa kendi presetiyle yanlis geri sayim yapar.
+      turnTimeMs: r.turnTimeMs,
     };
   }
 
@@ -262,7 +274,7 @@ export class GameRoom extends DurableObject {
       // Create room if new
       if (!this.room) {
         const code = this.ctx.id.name ?? url.searchParams.get("room") ?? "";
-        this.room = { code, players: [null, null], playerTokens: [null, null], disconnectedAt: [null, null], gamePhase: "LOBBY", winner: null, gameOverReason: null, restartRequested: [false, false], turnStartedAt: null, turnTimeMs: DEFAULT_TURN_TIME_MS, missedTurns: [0, 0] };
+        this.room = { code, players: [null, null], playerTokens: [null, null], disconnectedAt: [null, null], gamePhase: "LOBBY", winner: null, gameOverReason: null, restartRequested: [false, false], turnStartedAt: null, turnTimeMs: DEFAULT_TURN_TIME_MS, missedTurns: [0, 0], gameOverAt: null };
       }
       // Yerel bagli degisken: this.room uzerindeki daraltma ara fonksiyon
       // cagrilarinda kayboluyor, bu yuzden non-null referansi bir kez aliyoruz.
@@ -385,7 +397,7 @@ export class GameRoom extends DurableObject {
               case "ATTACKER_WINS": opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); if (!isForestTile) movedPiece.revealed = true; targetPiece.revealed = true; break;
               case "DEFENDER_WINS": player.pieces = player.pieces.filter(p => p.id !== movedPiece.id); if (!isForestTile) targetPiece.revealed = true; movedPiece.revealed = true; break;
               case "EQUAL_RANK": movedPiece.revealed = true; targetPiece.revealed = true; movedPiece.row = from.row; movedPiece.col = from.col; break;
-              case "GAME_OVER": opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); movedPiece.revealed = true; room.gamePhase = "GAME_OVER"; room.winner = player.team; room.gameOverReason = "FLAG"; newWinner = player.team; break;
+              case "GAME_OVER": opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); movedPiece.revealed = true; room.gamePhase = "GAME_OVER"; room.winner = player.team; room.gameOverReason = "FLAG"; room.gameOverAt = Date.now(); newWinner = player.team; break;
             }
           }
           if (room.gamePhase !== "GAME_OVER") room.gamePhase = room.gamePhase === "PLAY_RED" ? "PLAY_BLUE" : "PLAY_RED";
@@ -403,6 +415,18 @@ export class GameRoom extends DurableObject {
           await this.scheduleAlarm();
           break;
         }
+        // Tur suresini YALNIZCA oda kurucusu (slot 0) ve YALNIZCA oyun baslamadan
+        // once degistirebilir. Oyun sirasinda degistirmek sirasi gelen oyuncuya
+        // avantaj/dezavantaj yaratirdi. Degeri iki tarafa da yayinliyoruz: katilan
+        // oyuncu kendi presetini secmis olabilir ve ekraninda YANLIS sure sayardi.
+        case "set_turn_time": {
+          if (playerSlot !== 0 || isPlayPhase(room.gamePhase) || room.gamePhase === "GAME_OVER") break;
+          if (typeof msg.turnTime !== "number" || !isFinite(msg.turnTime)) break;
+          room.turnTimeMs = Math.max(MIN_TURN_TIME_MS, Math.min(MAX_TURN_TIME_MS, Math.round(msg.turnTime * 1000)));
+          await this.saveRoom();
+          this.broadcast({ type: "turn_time_changed", turnTimeMs: room.turnTimeMs });
+          break;
+        }
         case "request_restart": {
           room.restartRequested[playerSlot] = true;
           this.broadcast({ type: "restart_requested", slot: playerSlot });
@@ -411,6 +435,7 @@ export class GameRoom extends DurableObject {
             room.restartRequested = [false, false];
             room.gamePhase = "SETUP"; room.winner = null; room.gameOverReason = null;
             room.turnStartedAt = null; // dizilim asamasinda tur saati islemez
+            room.gameOverAt = null;
             room.missedTurns = [0, 0];
             this.broadcast({ type: "game_restarted", roomState: this.getRoomState() });
           }
@@ -443,6 +468,14 @@ export class GameRoom extends DurableObject {
     if (!room) return;
     const now = Date.now();
 
+    // 0) Biten oyunun odasi yasama suresini doldurdu mu? Doldurduysa gerisini
+    // isletmenin anlami yok — oda siliniyor ve alarm zinciri kapaniyor.
+    if (room.gamePhase === "GAME_OVER" && room.gameOverAt !== null && (now - room.gameOverAt) >= ROOM_TTL_MS) {
+      await this.deleteRoom();
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+
     // 1) Tur suresi doldu mu? Sirayi SUNUCU cevirir ve iki tarafa bildirir —
     // istemcinin kendi basina cevirmesi iki tarafi ayristiriyordu.
     if (room.turnStartedAt !== null && isPlayPhase(room.gamePhase) && (now - room.turnStartedAt) >= room.turnTimeMs) {
@@ -456,6 +489,7 @@ export class GameRoom extends DurableObject {
         room.gamePhase = "GAME_OVER";
         room.winner = null;
         room.gameOverReason = "TIMEOUT_DRAW";
+        room.gameOverAt = now;
         room.turnStartedAt = null;
         await this.saveRoom();
         this.broadcast({ type: "game_over", winner: null, reason: room.gameOverReason, missedTurns: this.missedTurnsView() });
@@ -478,6 +512,7 @@ export class GameRoom extends DurableObject {
           room.gamePhase = "GAME_OVER";
           room.winner = kalanSlot === 0 ? "1. Oyuncu" : "2. Oyuncu";
           room.gameOverReason = "OPPONENT_LEFT";
+          room.gameOverAt = now;
           room.turnStartedAt = null;
           // Kopma damgasi TEMIZLENMELI: birakilsaydi son tarihi coktan gecmis
           // oldugu icin alarm hemen yeniden tetiklenir, bu kez faz GAME_OVER

@@ -40,8 +40,9 @@ const MenuSettingsModal: React.FC<MenuSettingsModalProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                    {/* Oyun menuden baslamadigi icin burada kilit yok. */}
-                    <TimerPresetPicker timerPreset={timerPreset} onPresetChange={onPresetChange} isLocked={false} lang={lang} />
+                    {/* Oyun menuden baslamadigi icin burada kilit yok. Online'da secim
+                        yalnizca ODA KURUCUSU icin gecerli — not bunu soyluyor. */}
+                    <TimerPresetPicker timerPreset={timerPreset} onPresetChange={onPresetChange} isLocked={false} showHostNote lang={lang} />
                     <VolumeControl volume={volume} onVolumeChange={onVolumeChange} lang={lang} />
                 </div>
 

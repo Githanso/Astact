@@ -32,6 +32,7 @@ npm run typecheck
 npm run test:protokol  # dev sunucusu ayaktayken
 npm run test:tur-saati # dev sunucusu ayaktayken, ~35sn surer (tur saatini bekliyor)
 npm run test:oyun-sonu # dev sunucusu ayaktayken, ~2dk (beraberlik + kopma penceresi)
+npm run test:oda-ayar  # dev sunucusu ayaktayken, ~50sn (tur suresi senkronu + oda omru)
 ```
 
 Testler varsayilan olarak `ws://127.0.0.1:8787`'e baglanir; canliya karsi kosmak icin

@@ -11,10 +11,14 @@ interface TimerPresetPickerProps {
     timerPreset: TimerPreset;
     onPresetChange: (preset: TimerPreset) => void;
     isLocked: boolean;   // oyun basladiktan sonra degistirilemez
+    // Online oyunda tur suresini ODA KURUCUSU belirler; katilan oyuncunun buradaki
+    // secimi sunucuda yok sayilir. Menude hangi rolde olunacagi daha belli olmadigi
+    // icin not kosulsuz gosteriliyor.
+    showHostNote?: boolean;
     lang: Language;
 }
 
-export const TimerPresetPicker: React.FC<TimerPresetPickerProps> = ({ timerPreset, onPresetChange, isLocked, lang }) => {
+export const TimerPresetPicker: React.FC<TimerPresetPickerProps> = ({ timerPreset, onPresetChange, isLocked, showHostNote = false, lang }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
     return (
         <div className="p-2.5 bg-slate-800/60 rounded-xl border border-slate-700/60 text-xs">
@@ -47,6 +51,7 @@ export const TimerPresetPicker: React.FC<TimerPresetPickerProps> = ({ timerPrese
                 })}
             </div>
             {isLocked && <p className="mt-2 text-[10px] text-slate-500 leading-snug">{t.timerLockedHint}</p>}
+            {!isLocked && showHostNote && <p className="mt-2 text-[10px] text-slate-500 leading-snug">{t.timerHostOnlyHint}</p>}
         </div>
     );
 };

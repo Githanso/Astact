@@ -99,6 +99,10 @@ const App: React.FC = () => {
     useEffect(() => { isOnlineModeRef.current = isOnlineMode; }, [isOnlineMode]);
     const gamePhaseRef = useRef<GamePhase>('SETUP_RED');
     useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
+    // room_created işlenirken kurucunun seçtiği süre lazım; handleWsMessage boş
+    // bağımlılıkla useCallback olduğu için state'i doğrudan okuyamaz.
+    const timerConfigRef = useRef<TimerConfig>(TIMER_PRESETS.NORMAL);
+    useEffect(() => { timerConfigRef.current = timerConfig; }, [timerConfig]);
     const [stats, setStats] = useState<GameStats>({ gamesPlayed: 0, redWins: 0, blueWins: 0, totalBattles: 0, totalTurns: 0 });
     // Süresi dolduğu için kaçırılan tur sayısı (oyuncu başına, oyun boyunca birikimli).
     const [missedTurns, setMissedTurns] = useState<{ red: number; blue: number }>({ red: 0, blue: 0 });
@@ -126,8 +130,21 @@ const App: React.FC = () => {
     }, []);
 
     const handleWsMessage = useCallback((msg: any) => {
+        // Tur süresinin tek doğruluk kaynağı SUNUCU (oda kurucusu belirler). Süreyi
+        // taşıyan mesaj çok: roomState'liler, both_setup_complete, move_executed,
+        // turn_timeout, game_state_restored, turn_time_changed. Her birinde ayrı ayrı
+        // ele almak yerine tek noktada uyguluyoruz — katılan oyuncu kendi presetini
+        // seçmiş olabilir ve ekranında YANLIŞ süre sayardı.
+        const ms = msg.turnTimeMs ?? msg.roomState?.turnTimeMs;
+        if (typeof ms === 'number' && isFinite(ms)) {
+            const sn = Math.max(1, Math.round(ms / 1000));
+            setTimerConfig(prev => (prev.turnTime === sn ? prev : { ...prev, turnTime: sn }));
+        }
         switch (msg.type) {
-            case 'room_created': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); setShowRoomCode(true); break;
+            // Oda kurucusu kendi preset'ini HEMEN bildirmeli. Yukarıdaki senkron satırı
+            // bu mesajla gelen sunucu VARSAYILANINI (35sn) uygulayıp kurucunun menüden
+            // seçtiği süreyi eziyordu; kurucu 15sn seçmişken oyun 35sn ile başlıyordu.
+            case 'room_created': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); setShowRoomCode(true); sendWsMessage({ type: 'set_turn_time', turnTime: timerConfigRef.current.turnTime }); break;
             case 'room_joined': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); if (msg.roomState?.gamePhase === 'SETUP') { setIsOnlineModalOpen(false); setGamePhase(msg.playerTeam === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); } break;
             // Oda dolu / oyun devam ediyor gibi KALICI redler: yeniden baglanmayi
             // burada durduruyoruz, yoksa istemci 2sn'de bir bosuna deneyip durur.
@@ -328,13 +345,19 @@ const App: React.FC = () => {
     // Ses hem SettingsPanel'den hem StatsModal'dan değiştirilebiliyor; tek nokta.
     const handleVolumeChange = (v: number) => { setVolume(v); soundManager.setVolume(v); };
 
+    // Online'da tur süresini ODA KURUCUSU (1. Oyuncu) belirler; katılan oyuncunun
+    // seçimi sunucuda yok sayılıyordu ve ekranında yanlış süre sayıyordu. Artık
+    // katılan için ayar kilitli ve gerçek süre sunucudan geliyor.
+    const isRoomHost = !isOnlineMode || myOnlineTeam === PLAYERS.RED;
     // Süre ön ayarı YALNIZCA oyun başlamadan önce değiştirilebilir. Oyun sırasında
     // değiştirmek sırası gelen oyuncuya avantaj/dezavantaj yaratırdı.
-    const isTimerLocked = gamePhase.startsWith('PLAY');
+    const isTimerLocked = gamePhase.startsWith('PLAY') || !isRoomHost;
     const handlePresetChange = (newPreset: TimerPreset) => {
         if (isTimerLocked) return;
         setTimerPreset(newPreset); const config = TIMER_PRESETS[newPreset];
         setTimerConfig(config); setTurnTimeRemaining(config.turnTime);
+        // Rakip anında öğrensin; yoksa değişikliği ancak oyun başlayınca görürdü.
+        if (isOnlineMode) sendWsMessage({ type: 'set_turn_time', turnTime: config.turnTime });
     };
 
     // Geri sayım. Sadece azaltır — sıfıra inince ne olacağını AŞAĞIDAKİ efekt karar
