@@ -340,10 +340,14 @@ const App: React.FC = () => {
         if (!isOnlineMode || !myOnlineTeam || !roomState) return null;
         if (gamePhase === 'GAME_OVER') return null;
         const rakipKirmizi = myOnlineTeam === PLAYERS.BLUE;
-        const rakipOyuncu = rakipKirmizi ? roomState.redPlayer : roomState.bluePlayer;
+        // DIKKAT: "rakip katildi mi" sorusu redPlayer/bluePlayer ile SORULMAZ. O alan
+        // yalnizca gorunen ad ve oyuncu adi istege bagli — adsiz girenin adi null
+        // kaliyordu, dolayisiyla rakip hazir olsa da, hatta oyun oynanirken bile
+        // durum satiri "Rakip bekleniyor" yaziyordu (null kontrolu PLAY'den once).
+        const rakipVar = rakipKirmizi ? roomState.redPresent : roomState.bluePresent;
         const rakipBagli = rakipKirmizi ? roomState.redConnected : roomState.blueConnected;
         const rakipHazir = rakipKirmizi ? roomState.redReady : roomState.blueReady;
-        if (rakipOyuncu === null) return 'OPPONENT_WAITING';
+        if (!rakipVar) return 'OPPONENT_WAITING';
         if (!rakipBagli) return 'OPPONENT_OFFLINE';
         if (gamePhase.startsWith('PLAY')) {
             return currentPlayer === myOnlineTeam ? 'YOUR_TURN' : 'OPPONENT_TURN';

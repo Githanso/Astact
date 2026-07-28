@@ -176,6 +176,11 @@ export class GameRoom extends DurableObject {
       r.disconnectedAt[slot] === null ? null : Math.max(0, r.disconnectedAt[slot]! + DISCONNECT_TIMEOUT_MS - Date.now());
     return {
       roomCode: r.code, gamePhase: r.gamePhase,
+      // redPresent/bluePresent = SLOT DOLU MU. Istemci bunu "rakip odaya girdi mi"
+      // icin kullanmali; redPlayer/bluePlayer yalnizca GORUNEN AD ve oyuncu adi
+      // istege bagli oldugu icin adsiz girende null kaliyor. Ad uzerinden varlik
+      // cikarilinca adsiz rakip "hic katilmamis" sayiliyordu.
+      redPresent: !!r.players[0], bluePresent: !!r.players[1],
       redPlayer: r.players[0]?.name || null, redConnected: connected.has(0) && r.disconnectedAt[0] === null, redReady: !!r.players[0]?.ready,
       bluePlayer: r.players[1]?.name || null, blueConnected: connected.has(1) && r.disconnectedAt[1] === null, blueReady: !!r.players[1]?.ready,
       redDisconnectMs: kalan(0), blueDisconnectMs: kalan(1),

@@ -70,6 +70,9 @@ export type ConnectionNotice = 'OPPONENT_GONE' | 'OPPONENT_BACK' | 'SELF_GONE' |
 // Sunucunun getRoomState() ciktisi.
 export interface RoomState {
   gamePhase: string;
+  // Slot dolu mu. "Rakip odaya girdi mi" sorusu BUNUNLA yanitlanir —
+  // redPlayer/bluePlayer yalnizca gorunen ad ve oyuncu adi istege bagli.
+  redPresent?: boolean; bluePresent?: boolean;
   redPlayer: string | null; redConnected: boolean; redReady: boolean;
   bluePlayer: string | null; blueConnected: boolean; blueReady: boolean;
   // Kopan oyuncunun donmesi icin kalan sure (ms); bagliysa null.

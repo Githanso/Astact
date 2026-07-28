@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Users, Copy, Check, LogOut, Shield, Wifi, WifiOff, Sparkles, Send } from 'lucide-react';
-import { Language } from '../types';
+import { Language, RoomState } from '../types';
 import { TRANSLATIONS } from '../constants';
 
 interface OnlineModalProps {
@@ -8,15 +8,9 @@ interface OnlineModalProps {
   onClose: () => void;
   roomCode: string | null;
   playerTeam: '1. Oyuncu' | '2. Oyuncu' | null;
-  roomState: {
-    gamePhase: string;
-    redPlayer: string | null;
-    redConnected: boolean;
-    redReady: boolean;
-    bluePlayer: string | null;
-    blueConnected: boolean;
-    blueReady: boolean;
-  } | null;
+  // Sekli burada TEKRAR TANIMLAMA: types.ts'teki RoomState ile ayrisiyordu ve
+  // sunucuya alan eklenince bu kopya sessizce eskiyordu.
+  roomState: RoomState | null;
   onCreateRoom: (playerName: string) => void;
   onJoinRoom: (code: string, playerName: string) => void;
   onLeaveRoom: () => void;
@@ -159,13 +153,15 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
                   <Shield className="w-5 h-5 text-blue-500" />
                   <div>
                     <div className="text-xs font-bold text-slate-200">
-                      {roomState?.bluePlayer || t.statusWaiting}
+                      {/* Ad bos olabilir (istege bagli); o zaman takim etiketi basiliyor.
+                          "Bekleniyor" YALNIZCA slot gercekten bosken dogru. */}
+                      {roomState?.bluePlayer || (roomState?.bluePresent ? t.playerBlue : t.statusWaiting)}
                       {playerTeam === '2. Oyuncu' && <span className="ml-1.5 text-[10px] text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/40">{t.youBadge}</span>}
                     </div>
                     <div className="text-[10px] text-slate-400">2. Birlik (Misafir)</div>
                   </div>
                 </div>
-                {roomState?.bluePlayer ? (
+                {roomState?.bluePresent ? (
                   roomState.blueConnected ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> {t.onlineLabel}
@@ -184,7 +180,7 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
             </div>
 
             {/* Waiting Notice */}
-            {!roomState?.bluePlayer ? (
+            {!roomState?.bluePresent ? (
               <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-center text-xs text-amber-300 animate-pulse">
                 {t.waitingOpponentJoin}
               </div>

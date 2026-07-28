@@ -752,6 +752,40 @@ yardımcısı eklendi — yalnızca **görünen etiket** çevriliyor, kimlik Tü
 `lang`, `Board → Square → Piece` zincirinden geçirildi; `SetupUI` zaten alıyordu.
 `Piece.tsx`'te sabit yazılmış "Bayrak" / "Bomba" etiketleri de tabloya bağlandı.
 
+### Adsız rakip "hiç katılmamış" sayılıyordu
+
+Oyuncu adı **isteğe bağlı** ("Oyuncu Adınız (İsteğe Bağlı)"). Sunucu `getRoomState()`
+içinde `redPlayer: r.players[0]?.name || null` yazıyor — yani **adsız oyuncunun adı da
+`null`**. İstemci ise "rakip odaya girdi mi" sorusunu bu alana bakarak yanıtlıyordu:
+
+```ts
+if (rakipOyuncu === null) return 'OPPONENT_WAITING';   // App.tsx, onlineStatus
+```
+
+Sonuç: rakip adını yazmadan girdiyse, rastgele dizilip **Hazır**'a bassa bile karşı tarafta
+"Rakip bekleniyor" yazıyordu. Dahası bu `null` kontrolü `PLAY` kontrolünden **önce** olduğu
+için durum satırı **oyun boyunca** öyle kalıyordu — "Sıra sende / Sıra rakipte" hiç
+görünmüyordu. `OnlineModal` da aynı alana bakıyordu: misafir satırı "Bekleniyor" kalıyor,
+"⏳ Rakibinizin odaya katılması bekleniyor" bandı hiç kapanmıyordu.
+
+Düzeltme: sunucu artık **varlığı addan ayrı** bildiriyor.
+
+```ts
+redPresent: !!r.players[0], bluePresent: !!r.players[1],   // slot dolu mu
+redPlayer:  r.players[0]?.name || null,                    // yalnizca GORUNEN ad
+```
+
+İstemcinin üç yeri (`onlineStatus`, misafir satırı, bekleme bandı) `*Present` alanına
+bağlandı. Ad boşsa ekranda takım etiketi (`t.playerRed` / `t.playerBlue`) basılıyor —
+zaten amaçlanan davranış buydu.
+
+`OnlineModal` `RoomState`'in **kendi kopyasını** tutuyordu; `types.ts`'teki tanımla
+ayrışıyor ve sunucuya alan eklenince sessizce eskiyordu. Paylaşılan `RoomState` tipine
+bağlandı.
+
+Regresyon testi `test/oda-ayar-testi.mjs` senaryo 0'da: adsız oyuncunun **adı** `null`
+gelirken **varlığı** `true`, boş slot ise `false`.
+
 ### Online çarpışma geçmişi yanlış bilgi basıyordu
 
 `npm run test:carpisma` yazılırken çıktı: sunucudan gelen `combatResult`, panonun

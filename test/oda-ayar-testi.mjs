@@ -55,6 +55,43 @@ const check = (ok, label, extra = "") => {
 
 console.log(`Hedef: ${BASE}\n`);
 
+// ─── 0) ADSIZ oyuncu da "odada" sayilir ────────────────────────────────────
+// Oyuncu adi ISTEGE BAGLI. getRoomState adsiz oyuncu icin redPlayer/bluePlayer
+// alanina null yaziyor — o alan yalnizca GORUNEN AD. Istemci "rakip katildi mi"
+// sorusunu bu null'a bakarak yanitlayinca adsiz rakip hic gelmemis sayiliyordu:
+// rakip hazir olsa bile pano "Rakip bekleniyor" yaziyor, dahasi null kontrolu
+// PLAY kontrolunden once oldugu icin oyun boyunca oyle kaliyordu.
+console.log("=== 0) ADSIZ OYUNCU ODADA SAYILIYOR ===");
+{
+  const room = "TAK-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const tok = Date.now();
+  const p1 = await connect(room, "", "t1-" + tok, "P1-adsiz");
+  await sleep(500);
+  const p2 = await connect(room, "", "t2-" + tok, "P2-adsiz");
+  await sleep(1000);
+
+  const kuruldu = p1.messages.filter((m) => m.roomState).pop();
+  check(kuruldu?.roomState?.bluePlayer === null, "adsiz oyuncunun ADI null (beklenen)", `(${JSON.stringify(kuruldu?.roomState?.bluePlayer)})`);
+  check(kuruldu?.roomState?.bluePresent === true, "ama VARLIGI ayri alanda bildiriliyor", `(${kuruldu?.roomState?.bluePresent})`);
+  check(kuruldu?.roomState?.redPresent === true, "kendi slotu da dolu gorunuyor", `(${kuruldu?.roomState?.redPresent})`);
+
+  // Rakip hazir olunca kurucu bunu ogrenebilmeli.
+  p2.send(JSON.stringify({ type: "setup_complete", placedPieces: BLUE }));
+  await sleep(1000);
+  const durum = p1.messages.filter((m) => m.type === "player_setup_status").pop();
+  check(durum?.blueReady === true, "rakibin hazir oldugu bildirildi", `(${durum?.blueReady})`);
+
+  // Bos slot hala bos gorunmeli, yoksa alan hicbir sey ayirt etmiyor demektir.
+  const bosOda = "TAK-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const tek = await connect(bosOda, "", "t1-bos-" + tok, "P1-tek");
+  await sleep(900);
+  const bos = await waitFor(tek, "room_created");
+  check(bos?.roomState?.bluePresent === false, "rakip YOKKEN slot bos bildiriliyor", `(${bos?.roomState?.bluePresent})`);
+
+  p1.close(); p2.close(); tek.close();
+  await sleep(400);
+}
+
 // ─── 1) Tur suresini yalnizca ODA KURUCUSU degistirebilir ──────────────────
 console.log("=== 1) TUR SURESI SENKRONU ===");
 {
