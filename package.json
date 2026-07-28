@@ -13,7 +13,8 @@
     "test:tur-saati": "node test/tur-saati-testi.mjs",
     "test:oyun-sonu": "node test/oyun-sonu-testi.mjs",
     "test:oda-ayar": "node test/oda-ayar-testi.mjs",
-    "test:yeniden-baslat": "node test/yeniden-baslat-testi.mjs"
+    "test:yeniden-baslat": "node test/yeniden-baslat-testi.mjs",
+    "test:carpisma": "node test/carpisma-testi.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260722.1",

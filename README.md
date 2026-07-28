@@ -34,6 +34,7 @@ npm run test:tur-saati # dev sunucusu ayaktayken, ~35sn surer (tur saatini bekli
 npm run test:oyun-sonu # dev sunucusu ayaktayken, ~2dk (beraberlik + kopma penceresi)
 npm run test:oda-ayar  # dev sunucusu ayaktayken, ~50sn (tur suresi senkronu + oda omru)
 npm run test:yeniden-baslat # dev sunucusu ayaktayken, ~2.5dk (rovans akisi + sayac sifirlama)
+npm run test:carpisma  # dev sunucusu ayaktayken, ~1dk (carpisma kurallari + bilgi sizintisi)
 ```
 
 Testler varsayilan olarak `ws://127.0.0.1:8787`'e baglanir; canliya karsi kosmak icin
@@ -822,6 +823,29 @@ sadece değerler geçersiz.
 - **yana hareket kabul ediliyor** (Higgsfield sürümünde bloke idi)
 - geri hareket reddediliyor
 - oda verisi DO depolamasında kalıcı (sunucu yeniden başlasa da oda duruyor)
+
+`node test/carpisma-testi.mjs` çarpışma kurallarını ve **bilgi sızıntısını** ölçer (34 kontrol,
+hepsi geçiyor). `resolveCombat` oyunun kalbi ama bugüne kadar otomatik testi yoktu:
+
+- rütbe sıralaması her iki yönde (yüksek olan kazanır; zayıf saldıran ölür, savunan yerinde kalır)
+- Bomba üzerine gelen normal taşı yok eder, kendisi sabit kalır
+- İstihkamcı (MINER) rütbesi 1 olmasına rağmen Bombayı imha edip kareye geçer
+- Casus **saldırdığında** Mareşal'i alır; Mareşal saldırdığında Casus ölür (kural tek yönlü)
+- eşit rütbede ikisi de yaşar, saldıran eski karesine döner, ikisi de açığa çıkar
+- Bayrak alınınca `GAME_OVER` + `reason: FLAG` iki tarafa da ulaşır
+
+Sızıntı tarafı ayrı ölçülüyor, çünkü çarpışma sonucu her oyuncu için **ayrı** kurgulanıyor
+(`cP0`/`cP1`, `server.ts:409-410`) ve oradaki tek bir yanlış koşul rakibin taşının rütbesini
+sessizce sızdırır:
+
+- açık alanda kazanan saldıran açığa çıkar (`attackerRank` karşı tarafa gider) — **kontrol grubu**
+- ormanda kazanan saldıran gizli kalır: rakip `attackerName`/`attackerRank` olarak `null` alır,
+  tahtada da `rank`/`name` alanı hiç yok
+- ormanda kazanan savunan da gizli kalır: saldıran "kaybettim" bilgisini alır ama neye
+  kaybettiğini öğrenemez (aynı çarpışma açık alanda Bombayı ele veriyor)
+
+Orman senaryolarının açık alan kontrol grubu olması şart: yoksa gelen `null`, kural işlediği
+için mi yoksa alan hiç doldurulmadığı için mi boş, ayırt edilemezdi.
 
 Ayarlar panosu tarayıcıda elle doğrulandı:
 
