@@ -8,24 +8,31 @@ export const PLAYERS: { [key: string]: Player } = {
   BLUE: '2. Oyuncu',
 };
 
-// Lakes in middle region (rows 6..8)
+// DIKKAT: bu iki liste src/server.ts'teki kopyalariyla BIREBIR ayni olmali.
+// Sunucu hamleyi bunlara gore dogruluyor; ayrisirlarsa istemci gecerli gosterdigi
+// bir hamleyi sunucu reddeder (ve hata mesaji ekranda gorunmez).
 export const LAKE_COORDS: { row: number, col: number }[] = [
-  // Tarafsiz bant: 4-6. sutunlar. Iki blok, yatay merkeze gore simetrik.
-  { row: 1, col: 4 }, { row: 1, col: 5 }, { row: 1, col: 6 },
-  { row: 2, col: 4 }, { row: 2, col: 5 }, { row: 2, col: 6 },
-  { row: 7, col: 4 }, { row: 7, col: 5 }, { row: 7, col: 6 },
-  { row: 8, col: 4 }, { row: 8, col: 5 }, { row: 8, col: 6 },
+  // Tarafsiz bant: 4-6. sutunlar. Goller ARTIK 4. sutunu kapsamiyor: o sutun
+  // bastan asagi agac koridoru oldu (asagi bak).
+  { row: 1, col: 5 }, { row: 1, col: 6 },
+  { row: 2, col: 5 }, { row: 2, col: 6 },
+  { row: 7, col: 5 }, { row: 7, col: 6 },
+  { row: 8, col: 5 }, { row: 8, col: 6 },
 ];
 
-// Asymmetrical Forest clusters in center region (rows 5..9)
 export const FOREST_COORDS: { row: number, col: number, density: number }[] = [
-  // Ormanlar tarafsiz bandin acik koridorlarinda; gollerle cakismaz.
-  { row: 0, col: 4, density: 3 }, { row: 0, col: 5, density: 2 }, { row: 0, col: 6, density: 3 },
+  // 4. sutun (ekranda e) tahtanin iki ucunda dikey agac koridoru; eskiden 0. ve
+  // 9. satirlarda yatay agac bandi vardi ve 4. sutunun ustu/alti goldu.
+  //
+  // NOT: koridor YALNIZCA 4. sutunda. Aynasi olan 6. sutun (ekranda g) gol
+  // kaldigi icin tahta sol-sag simetrik DEGIL: mavi bu koridora yandan girer,
+  // kirmizi 0. / 9. satirdan dolasmak zorunda. Bilincli bir tasarim karari.
+  { row: 0, col: 4, density: 3 }, { row: 1, col: 4, density: 2 }, { row: 2, col: 4, density: 3 },
   { row: 3, col: 4, density: 2 }, { row: 3, col: 6, density: 1 },
   { row: 4, col: 5, density: 3 },
   { row: 5, col: 5, density: 2 },
   { row: 6, col: 4, density: 1 }, { row: 6, col: 6, density: 2 },
-  { row: 9, col: 4, density: 3 }, { row: 9, col: 5, density: 2 }, { row: 9, col: 6, density: 3 },
+  { row: 7, col: 4, density: 3 }, { row: 8, col: 4, density: 2 }, { row: 9, col: 4, density: 3 },
 ];
 
 export const PIECE_DEFINITIONS: { [key: string]: Omit<PieceDefinition, 'count'> } = {

@@ -148,23 +148,30 @@ satırlardı).
 
 Yeni düzen: **10 satır × 11 sütun**, oyuncular sağ-sol karşı karşıya.
 
+Tarafsız bant yalnızca 4-6. sütunlar; sağdaki şema o üç sütunu gösteriyor.
+
 ```
-   0 1 2 3 4 5 6 7 8 9 10
- 0 ░░░░░░░░ ♠♠♠♠♠♠ ▓▓▓▓▓▓▓▓
- 1 ░░░░░░░░ ~~~~~~ ▓▓▓▓▓▓▓▓     ░ mavi dizilim (0-3)
- 2 ░░░░░░░░ ~~~~~~ ▓▓▓▓▓▓▓▓     ▓ kırmızı dizilim (7-10)
- 3 ░░░░░░░░ ♠♠·♠♠ ▓▓▓▓▓▓▓▓     ~ göl   ♠ orman
- 4 ░░░░░░░░ ·♠♠· ▓▓▓▓▓▓▓▓
- 5 ░░░░░░░░ ·♠♠· ▓▓▓▓▓▓▓▓      dizilim: 4 sütun × 10 satır
- 6 ░░░░░░░░ ♠♠·♠♠ ▓▓▓▓▓▓▓▓                 = 40 kare = 40 taş
- 7 ░░░░░░░░ ~~~~~~ ▓▓▓▓▓▓▓▓                → BOŞLUK YOK
- 8 ░░░░░░░░ ~~~~~~ ▓▓▓▓▓▓▓▓
- 9 ░░░░░░░░ ♠♠♠♠♠♠ ▓▓▓▓▓▓▓▓
+      sütun:  4 5 6
+ satır 0      ♠ · ·      ░ mavi dizilim (0-3)   ▓ kırmızı dizilim (7-10)
+       1      ♠ ~ ~      ~ göl   ♠ orman   · boş
+       2      ♠ ~ ~
+       3      ♠ · ♠      dizilim: 4 sütun × 10 satır = 40 kare = 40 taş
+       4      · ♠ ·                → BOŞLUK YOK
+       5      · ♠ ·
+       6      ♠ · ♠
+       7      ♠ ~ ~
+       8      ♠ ~ ~
+       9      ♠ · ·
 ```
 
 - Dizilim alanı **tam 40 kare**, taş havuzu (`PIECE_COUNTS` toplamı 40) değişmedi.
 - Tarafsız bant 3 sütun × 10 satır = 30 kare — göller ve ormanlar rahat sığdı, orman rütbe
   gizleme mekaniği korundu.
+- **4. sütun baştan aşağı ağaç koridoru** (yalnızca 4-5. satırlarda boş). Eskiden 0. ve 9.
+  satırlarda yatay ağaç bandı vardı, 4. sütunun üstü ve altı göldü.
+- Bu koridorun aynası olan **6. sütun göl kaldı**, yani tahta sol-sağ simetrik **değil**:
+  mavi koridora yandan girebiliyor, kırmızı 0. veya 9. satırdan dolaşmak zorunda. Bilinçli
+  bir tasarım kararı; adalet ekseni sütun aynasıdır, satır aynası değil.
 - **Hareket ekseni satırdan sütuna döndü.** Kırmızı sağda, sola ilerler (`dc < 0`); mavi
   solda, sağa ilerler (`dc > 0`). Yanal hareket artık satır ekseninde. Hem istemcideki
   `calculateValidMoves` hem sunucudaki doğrulama buna göre değişti.
@@ -172,7 +179,12 @@ Yeni düzen: **10 satır × 11 sütun**, oyuncular sağ-sol karşı karşıya.
 
 **Not:** `BOARD_ROWS`/`BOARD_COLS` ve göl/orman koordinatları **iki dosyada birden** tanımlı
 (`client/constants.ts` ve `src/server.ts`) — birini değiştirirken diğerini de değiştirin,
-yoksa sunucu ile istemci farklı tahta görür.
+yoksa sunucu ile istemci farklı tahta görür. Bu ayrışma sessizdir: istemci geçerli gösterdiği
+bir hamleyi sunucu reddeder ve `move_error` oyun ekranında basılmadığı için kullanıcıya
+"tıklama çalışmıyor" gibi görünür. `npm run test:protokol` senaryo 3b artık iki listeyi
+**kare kare** karşılaştırıyor; istemci sabitlerini metin olarak okuyup sunucunun bildirdiği
+tahtayla eşleştiriyor. Testin gerçekten yakaladığı, bir gölü tek taraftan silip koşularak
+doğrulandı.
 
 **Yan bulgu:** eski `grid-rows-15` sınıfı hiç CSS üretmiyordu — Tailwind'in varsayılan
 `grid-rows` değerleri 1-6 ile sınırlı ve `theme.extend` boştu. Tahta yalnızca `grid-cols-10`

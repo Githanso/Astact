@@ -1,7 +1,9 @@
 // Astact online protokol testi — tahta 10 satir x 11 sutun, oyuncular SAG-SOL.
 //   Mavi (2. Oyuncu): 0-3. sutunlar, saga ilerler (dc > 0)
 //   Kirmizi (1. Oyuncu): 7-10. sutunlar, sola ilerler (dc < 0)
-//   Goller: 1,2,7,8. satirlar x 4,5,6. sutunlar
+//   Goller: 1,2,7,8. satirlar x 5,6. sutunlar (4. sutun agac koridoru)
+import { readFileSync } from "node:fs";
+
 const BASE = process.env.ASTACT_WS || "ws://127.0.0.1:8787/ws/game-room";
 
 const log = (who, ...a) => console.log(`[${who}]`, ...a);
@@ -83,7 +85,48 @@ if (bs1) {
   const grid = bs1.myPieces;
   check(Array.isArray(grid) && grid.length === 10, "tahta 10 satir", `(${grid?.length})`);
   check(Array.isArray(grid?.[0]) && grid[0].length === 11, "tahta 11 sutun", `(${grid?.[0]?.length})`);
-  check(grid?.[1]?.[5] === "LAKE", "gol dogru yerde (1,5)", `(${JSON.stringify(grid?.[1]?.[5])})`);
+}
+
+// ─── 3b) ARAZI: sunucu ile istemci ayni tahtayi mi biliyor? ────────────────
+// LAKE_COORDS/FOREST_COORDS iki yerde AYRI AYRI elle tutuluyor (src/server.ts ve
+// client/constants.ts). Ayrisirlarsa istemci gecerli gosterdigi bir hamleyi sunucu
+// reddeder; hata mesaji oyun ekraninda basilmadigi icin kullaniciya "tiklama
+// calismiyor" gibi gorunur. Tek nokta kontrolu yetmez, TUM kareler karsilastiriliyor.
+console.log("\n=== 3b) ARAZI SUNUCU <-> ISTEMCI SENKRONU ===");
+if (bs1) {
+  const kaynak = readFileSync(new URL("../client/constants.ts", import.meta.url), "utf8");
+  // Ilgili blogu ayikla, icindeki { row: N, col: M } ciftlerini topla.
+  const blok = (ad) => {
+    const m = kaynak.match(new RegExp(`${ad}[\\s\\S]*?\\[([\\s\\S]*?)\\];`));
+    if (!m) return null;
+    return [...m[1].matchAll(/\{\s*row:\s*(\d+)\s*,\s*col:\s*(\d+)/g)].map((x) => `${x[1]},${x[2]}`);
+  };
+  const istemciGol = blok("LAKE_COORDS");
+  const istemciOrman = blok("FOREST_COORDS");
+  check(!!istemciGol?.length && !!istemciOrman?.length, "istemci sabitleri okunabildi",
+        `(gol=${istemciGol?.length} orman=${istemciOrman?.length})`);
+
+  const grid = bs1.myPieces;
+  const sunucuGol = [], sunucuOrman = [], tasliKare = [];
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 11; c++) {
+    const h = grid[r][c];
+    if (h === "LAKE") sunucuGol.push(`${r},${c}`);
+    else if (h === "FOREST") sunucuOrman.push(`${r},${c}`);
+    else if (h && typeof h === "object") tasliKare.push(`${r},${c}`);
+  }
+
+  // Bir tas orman karesinin ustunde duruyorsa sunucu o kareye tasi yaziyor, arazi
+  // gorunmuyor. Bu kareler karsilastirmadan DUSULUYOR; yoksa test, dizilim
+  // degistiginde arazi bozulmus gibi yanlis alarm verirdi.
+  const fark = (a, b) => a.filter((x) => !b.includes(x) && !tasliKare.includes(x));
+  check(fark(sunucuGol, istemciGol).length === 0, "sunucudaki her gol istemcide de var",
+        fark(sunucuGol, istemciGol).join(" ") || "");
+  check(fark(istemciGol, sunucuGol).length === 0, "istemcideki her gol sunucuda da var",
+        fark(istemciGol, sunucuGol).join(" ") || "");
+  check(fark(sunucuOrman, istemciOrman).length === 0, "sunucudaki her orman istemcide de var",
+        fark(sunucuOrman, istemciOrman).join(" ") || "");
+  check(fark(istemciOrman, sunucuOrman).length === 0, "istemcideki her orman sunucuda da var",
+        fark(istemciOrman, sunucuOrman).join(" ") || "");
 }
 
 console.log("\n=== 4) RUTBE GIZLEME ===");
