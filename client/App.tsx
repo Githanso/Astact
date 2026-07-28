@@ -13,6 +13,7 @@ import RestartNoticeModal from './components/RestartNoticeModal';
 import GameOverModal from './components/GameOverModal';
 import OnlineModal from './components/OnlineModal';
 import ConnectionBanner from './components/ConnectionBanner';
+import MoveErrorToast from './components/MoveErrorToast';
 import { soundManager } from './lib/soundFX';
 
 // Sunucudaki DISCONNECT_TIMEOUT_MS ile ayni: rakip donmezse oyun bu surenin
@@ -83,6 +84,10 @@ const App: React.FC = () => {
     // Baglanti seridi. Kopma anindan itibaren geri sayim gosterir.
     const [connectionNotice, setConnectionNotice] = useState<ConnectionNotice>(null);
     const [connectionSec, setConnectionSec] = useState<number | null>(null);
+    // Sunucunun reddettigi hamle. Ayni hata pes pese gelebildigi icin metinle
+    // birlikte bir sayac tutuluyor: yalnizca metne baksaydik ikinci kez ayni
+    // reddi alan oyuncuda serit yeniden canlanmaz, hic tepki yokmus gibi olurdu.
+    const [moveError, setMoveError] = useState<{ metin: string; no: number } | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     // Yeniden baglanmada sunucunun bildirdigi KALAN tur suresi (saniye); faz efekti
     // tarafindan bir kez okunup temizlenir.
@@ -168,7 +173,13 @@ const App: React.FC = () => {
             // Rutbe BILINCE null birakiliyor, 0'a cevrilmiyor: 0 gercek bir rutbe
             // (Bayrak) ve ormanda gizlenen tasi "Rutbe 0" diye gosteriyordu.
             case 'move_executed': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (msg.nextPhase) setGamePhase(msg.nextPhase); if (msg.combatResult) { const c = msg.combatResult; const saldiranTakim: Player = msg.attackerTeam === PLAYERS.BLUE ? PLAYERS.BLUE : PLAYERS.RED; const savunanTakim: Player = saldiranTakim === PLAYERS.RED ? PLAYERS.BLUE : PLAYERS.RED; const cr: CombatResult = { outcome: c.outcome as any, attacker: { name: c.attackerName || '???', rank: c.attackerRank ?? null, special: c.attackerSpecial ?? null, owner: saldiranTakim } as any, defender: { name: c.defenderName || (c.outcome === 'GAME_OVER' ? 'Bayrak' : '???'), rank: c.defenderRank ?? null, owner: savunanTakim } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); } if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } break; }
-            case 'move_error': setOnlineErrorMessage(TR_CODE(msg.code, msg.message)); break;
+            // Hamle hatasi ARTIK onlineErrorMessage'a yazilmiyor: o alan yalnizca
+            // OnlineModal icinde basiliyor, oyun sirasinda o modal kapali oldugu icin
+            // red gorunmuyordu (bkz. MoveErrorToast). Ustelik metin orada takili
+            // kaliyordu; modal sonradan acildiginda coktan gecmis bir hamle hatasi
+            // hala duruyordu. Oda seviyesindeki hatalar (room_error) orada kalmaya
+            // devam ediyor, onlar zaten modalin konusu.
+            case 'move_error': setMoveError(prev => ({ metin: TR_CODE(msg.code, msg.message), no: (prev?.no ?? 0) + 1 })); break;
             // Oyun sonu ARTIK uc kaynaktan gelebiliyor: bayrak dustu (FLAG), iki taraf
             // da tur kacirma sinirina ulasti (TIMEOUT_DRAW), rakip geri donmedi
             // (OPPONENT_LEFT). Konfeti yalnizca KAZANANA atiliyor — kaybedenin
@@ -425,6 +436,14 @@ const App: React.FC = () => {
     }, [gamePhase, timerConfig.turnTime]);
     useEffect(() => { if (lastCombatCoords) { const t = setTimeout(() => setLastCombatCoords(null), 700); return () => clearTimeout(t); } }, [lastCombatCoords]);
 
+    // Hamle hatasi seridi kendiliginden kayboluyor. Bagimlilik metin degil SAYAC:
+    // ayni hata pes pese geldiginde de sure bastan baslamali.
+    useEffect(() => {
+        if (!moveError) return;
+        const t = setTimeout(() => setMoveError(null), 2600);
+        return () => clearTimeout(t);
+    }, [moveError?.no]);
+
     // Baglanti seridindeki geri sayim. Sifira inince beklemeye devam eder; oyunu
     // bitirme karari SUNUCUNUN (alarm), istemci yalnizca gosteriyor.
     useEffect(() => {
@@ -644,6 +663,12 @@ const App: React.FC = () => {
         {/* Serit oyun sonu ekraninin ALTINDA kalir (z-900 < z-1000): oyun bittiginde
             baglanti uyarisi degil sonuc onemli. */}
         <ConnectionBanner notice={gamePhase === 'GAME_OVER' ? null : connectionNotice} remainingSec={connectionSec} lang={lang} />
+        {/* Reddedilen hamle seridi. Baglanti seridi aciksa onun altina iniyor. Oyun
+            sonunda gizleniyor: sonuc ekrani acikken eski bir hamle reddi anlamsiz. */}
+        <MoveErrorToast
+            mesaj={gamePhase === 'GAME_OVER' ? null : (moveError?.metin ?? null)}
+            kaydir={gamePhase !== 'GAME_OVER' && connectionNotice !== null}
+        />
         <GameOverModal winner={winner} isTimeoutDraw={isTimeoutDraw} myTeam={isOnlineMode ? myOnlineTeam : null} reason={gameOverReason} notice={gamePhase === 'GAME_OVER' ? oyunSonuBildirimi : null} gamePhase={gamePhase} onRestart={handleRestartGame} lang={lang} onClose={() => setGamePhase('SETUP_RED')} />
         {gamePhase !== 'GAME_OVER' && (
             <RestartNoticeModal notice={restartNotice} onConfirm={handleRestartGame} onClose={() => setRestartNotice(null)} lang={lang} />

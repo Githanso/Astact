@@ -767,6 +767,38 @@ yardımcısı eklendi — yalnızca **görünen etiket** çevriliyor, kimlik Tü
 `lang`, `Board → Square → Piece` zincirinden geçirildi; `SetupUI` zaten alıyordu.
 `Piece.tsx`'te sabit yazılmış "Bayrak" / "Bomba" etiketleri de tabloya bağlandı.
 
+### Hamle hataları ekranda hiç görünmüyordu
+
+`move_error` sunucudan geliyordu ama istemci onu yalnızca `onlineErrorMessage`'a yazıyordu —
+o metin ise **sadece `OnlineModal` içinde** basılıyor ve oyun sırasında o modal kapalı.
+Sunucu hamleyi reddediyor, ekranda hiçbir şey olmuyordu. Kullanıcıya "tıklama çalışmıyor"
+gibi görünüyor.
+
+Bu aynı tuzağın üçüncü kez tekrarı: "Yeniden Başlat" ve `room_error` da aynı sebeple
+görünmüyordu (bkz. yukarıdaki bölümler). Ortak kök neden, **oyun sırasında kapalı olan bir
+modalın içine geri bildirim yazmak**.
+
+Düzeltme: `MoveErrorToast` — üstte, kendiliğinden kaybolan şerit.
+
+- **Modal değil.** `ConnectionBanner` ile aynı gerekçe: hata oyuncunun kendi tıklamasının
+  sonucu ve hemen tekrar denemesi gerekiyor, ekranı kilitlemek yanlış olurdu.
+- **2,6 sn sonra kayboluyor**, kapatma düğmesi yok.
+- Durum metinle birlikte bir **sayaç** tutuyor (`{ metin, no }`). Yalnızca metne bakılsaydı
+  aynı reddi ikinci kez alan oyuncuda `useEffect` yeniden tetiklenmez, şerit canlanmaz ve
+  hiç tepki yokmuş gibi olurdu.
+- Bağlantı şeridi açıkken `top-24`'e iniyor; ikisi aynı anda çıkabiliyor (rakip kopmuşken
+  hamle denemek gibi).
+- `move_error` **artık `onlineErrorMessage`'a yazılmıyor**. Orada takılı kalıyordu: modal
+  sonradan açıldığında çoktan geçmiş bir hamle hatası hâlâ duruyordu. Oda seviyesindeki
+  hatalar (`room_error`) orada kalmaya devam ediyor — onlar zaten modalin konusu.
+
+Metin çeviriden geçiyor: `TR_CODE` sunucunun `code` alanını `err<KOD>` anahtarına çeviriyor
+ve 12 kodun hepsi dört dilde tanımlı. Bileşen bu yüzden `lang` almıyor, metni hazır alıyor.
+
+Tarayıcıda doğrulandı: göl hamlesi → "Göl üzerine gidilemez.", 3 sn sonra kayboluyor, aynı
+hata tekrar gelince süre sıfırlanıyor (2,2 sn'de tekrar gönderilip 3,8 sn'de hâlâ görünür
+olduğu ölçüldü), ve EN'de "This piece cannot move." basılıyor.
+
 ### Adsız rakip "hiç katılmamış" sayılıyordu
 
 Oyuncu adı **isteğe bağlı** ("Oyuncu Adınız (İsteğe Bağlı)"). Sunucu `getRoomState()`
