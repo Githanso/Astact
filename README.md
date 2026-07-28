@@ -158,20 +158,23 @@ Tarafsız bant yalnızca 4-6. sütunlar; sağdaki şema o üç sütunu gösteriy
        3      ♠ · ♠      dizilim: 4 sütun × 10 satır = 40 kare = 40 taş
        4      · ♠ ·                → BOŞLUK YOK
        5      · ♠ ·
-       6      ♠ · ♠
-       7      ♠ ~ ~
-       8      ♠ ~ ~
-       9      ♠ · ·
+       6      · · ♠
+       7      ~ ~ ♠
+       8      ~ ~ ♠
+       9      · · ♠
 ```
 
 - Dizilim alanı **tam 40 kare**, taş havuzu (`PIECE_COUNTS` toplamı 40) değişmedi.
 - Tarafsız bant 3 sütun × 10 satır = 30 kare — göller ve ormanlar rahat sığdı, orman rütbe
   gizleme mekaniği korundu.
-- **4. sütun baştan aşağı ağaç koridoru** (yalnızca 4-5. satırlarda boş). Eskiden 0. ve 9.
-  satırlarda yatay ağaç bandı vardı, 4. sütunun üstü ve altı göldü.
-- Bu koridorun aynası olan **6. sütun göl kaldı**, yani tahta sol-sağ simetrik **değil**:
-  mavi koridora yandan girebiliyor, kırmızı 0. veya 9. satırdan dolaşmak zorunda. Bilinçli
-  bir tasarım kararı; adalet ekseni sütun aynasıdır, satır aynası değil.
+- Desen **180° dönme simetrik**: `(r, c) → (9-r, 10-c)`. Üst uçta ağaç koridoru 4. sütunda
+  (mavinin yanında), alt uçta 6. sütunda (kırmızının yanında); göller her uçta koridorun
+  karşı tarafında. Tek istisna `(3,6)` ormanı — karşılığı olan `(6,4)` boş.
+- Ayna (sol-sağ) simetri **bilerek kullanılmadı**: koridoru tek sütuna koyup aynalasaydık
+  bir oyuncu koridora yandan girerken diğeri gölleri dolaşmak zorunda kalırdı. Dönme
+  simetrisinde iki oyuncu da kendi ucundaki koridora yandan giriyor.
+- `FOREST_COORDS` içindeki `density` yalnızca kaç ağaç çizileceğini belirler; kurala etkisi
+  yoktur.
 - **Hareket ekseni satırdan sütuna döndü.** Kırmızı sağda, sola ilerler (`dc < 0`); mavi
   solda, sağa ilerler (`dc > 0`). Yanal hareket artık satır ekseninde. Hem istemcideki
   `calculateValidMoves` hem sunucudaki doğrulama buna göre değişti.

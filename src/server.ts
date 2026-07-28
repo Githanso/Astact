@@ -54,22 +54,22 @@ const BOARD_ROWS = 10, BOARD_COLS = 11;
 // DIKKAT: iki liste de istemcideki constants.ts ile BIREBIR ayni olmali.
 // Ayrisirlarsa istemci gecerli gosterdigi bir hamleyi sunucu reddeder ve
 // hata mesaji oyun ekraninda gorunmedigi icin "tiklama calismiyor" gibi durur.
+// Tarafsiz bant 4-6. sutunlar. Desen 180 DERECE DONME simetrik: (r,c) -> (9-r, 10-c).
+// Ust ucta agac koridoru 4. sutunda (mavinin yaninda), alt ucta 6. sutunda
+// (kirmizinin yaninda); goller her ucta koridorun karsi tarafinda.
 const LAKE_COORDS = [
-  // Tarafsiz bant: 4-6. sutunlar. Goller artik 4. sutunu KAPSAMIYOR.
   { row: 1, col: 5 }, { row: 1, col: 6 },
   { row: 2, col: 5 }, { row: 2, col: 6 },
-  { row: 7, col: 5 }, { row: 7, col: 6 },
-  { row: 8, col: 5 }, { row: 8, col: 6 },
+  { row: 7, col: 4 }, { row: 7, col: 5 },
+  { row: 8, col: 4 }, { row: 8, col: 5 },
 ];
 const FOREST_COORDS = [
-  // 4. sutun tahtanin iki ucunda dikey agac koridoru. Aynasi olan 6. sutun gol
-  // kaldigi icin sol-sag simetri BILEREK bozuk (bkz. client/constants.ts).
   { row: 0, col: 4 }, { row: 1, col: 4 }, { row: 2, col: 4 },
   { row: 3, col: 4 }, { row: 3, col: 6 },
   { row: 4, col: 5 },
   { row: 5, col: 5 },
-  { row: 6, col: 4 }, { row: 6, col: 6 },
-  { row: 7, col: 4 }, { row: 8, col: 4 }, { row: 9, col: 4 },
+  { row: 6, col: 6 },
+  { row: 7, col: 6 }, { row: 8, col: 6 }, { row: 9, col: 6 },
 ];
 function isLake(r: number, c: number) { return LAKE_COORDS.some(l => l.row === r && l.col === c); }
 function isForest(r: number, c: number) { return FOREST_COORDS.some(f => f.row === r && f.col === c); }
