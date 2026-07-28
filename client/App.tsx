@@ -56,6 +56,11 @@ const App: React.FC = () => {
     const [combatHistory, setCombatHistory] = useState<CombatResult[]>([]);
     const [pieceToSwap, setPieceToSwap] = useState<PlacedPiece | null>(null);
     const [lastCombatCoords, setLastCombatCoords] = useState<Coords | null>(null);
+    // Son hamlenin INDIGI kare — orada halka animasyonu doner. lastCombatCoords'tan
+    // ayri tutuluyor cunku o yalnizca CARPISMA olunca doluyor; oysa sade hamlelerin
+    // de gorunmesi gerekiyor, rakip oynadiginda tahtada ne degistigi baska turlu
+    // fark edilmiyor.
+    const [lastMove, setLastMove] = useState<{ coords: Coords; owner: Player } | null>(null);
     // Muzik oyun acilir acilmaz calsin diye varsayilan ses ACIK. Tarayici autoplay'i
     // kullanici jesti oncesi engelledigi icin gercek baslangic menudeki dugme tiklamasinda
     // oluyor (unlockAudio) — pratikte "oyun acilinca" demek.
@@ -172,7 +177,7 @@ const App: React.FC = () => {
             //
             // Rutbe BILINCE null birakiliyor, 0'a cevrilmiyor: 0 gercek bir rutbe
             // (Bayrak) ve ormanda gizlenen tasi "Rutbe 0" diye gosteriyordu.
-            case 'move_executed': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (msg.nextPhase) setGamePhase(msg.nextPhase); if (msg.combatResult) { const c = msg.combatResult; const saldiranTakim: Player = msg.attackerTeam === PLAYERS.BLUE ? PLAYERS.BLUE : PLAYERS.RED; const savunanTakim: Player = saldiranTakim === PLAYERS.RED ? PLAYERS.BLUE : PLAYERS.RED; const cr: CombatResult = { outcome: c.outcome as any, attacker: { name: c.attackerName || '???', rank: c.attackerRank ?? null, special: c.attackerSpecial ?? null, owner: saldiranTakim } as any, defender: { name: c.defenderName || (c.outcome === 'GAME_OVER' ? 'Bayrak' : '???'), rank: c.defenderRank ?? null, owner: savunanTakim } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); } if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } break; }
+            case 'move_executed': { const mb = createEmptyBoard(); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); if (msg.nextPhase) setGamePhase(msg.nextPhase); const saldiranTakim: Player = msg.attackerTeam === PLAYERS.BLUE ? PLAYERS.BLUE : PLAYERS.RED; if (msg.to) setLastMove({ coords: { row: msg.to.row, col: msg.to.col }, owner: saldiranTakim }); if (msg.combatResult) { const c = msg.combatResult; const savunanTakim: Player = saldiranTakim === PLAYERS.RED ? PLAYERS.BLUE : PLAYERS.RED; const cr: CombatResult = { outcome: c.outcome as any, attacker: { name: c.attackerName || '???', rank: c.attackerRank ?? null, special: c.attackerSpecial ?? null, owner: saldiranTakim } as any, defender: { name: c.defenderName || (c.outcome === 'GAME_OVER' ? 'Bayrak' : '???'), rank: c.defenderRank ?? null, owner: savunanTakim } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); } if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } break; }
             // Hamle hatasi ARTIK onlineErrorMessage'a yazilmiyor: o alan yalnizca
             // OnlineModal icinde basiliyor, oyun sirasinda o modal kapali oldugu icin
             // red gorunmuyordu (bkz. MoveErrorToast). Ustelik metin orada takili
@@ -435,6 +440,10 @@ const App: React.FC = () => {
         setTurnTimeRemaining(sunucuKalan !== null ? sunucuKalan : timerConfig.turnTime);
     }, [gamePhase, timerConfig.turnTime]);
     useEffect(() => { if (lastCombatCoords) { const t = setTimeout(() => setLastCombatCoords(null), 700); return () => clearTimeout(t); } }, [lastCombatCoords]);
+    // Halka animasyonu 0.65sn; bitince durumu temizliyoruz ki bir sonraki hamlede
+    // element yeniden takilsin ve animasyon BASTAN oynasin. Temizlemezsek ayni
+    // kareye ikinci kez inildiginde CSS animasyonu yeniden tetiklenmez.
+    useEffect(() => { if (lastMove) { const t = setTimeout(() => setLastMove(null), 700); return () => clearTimeout(t); } }, [lastMove]);
 
     // Hamle hatasi seridi kendiliginden kayboluyor. Bagimlilik metin degil SAYAC:
     // ayni hata pes pese geldiginde de sure bastan baslamali.
@@ -643,7 +652,7 @@ const App: React.FC = () => {
                 Sabitler: baslik + main dolgusu (online modda baslik bir satir daha uzun),
                 +32px = ust/alt koordinat seritleri, 1.1 = 11/10 en-boy orani. */}
             <div className={`relative flex-grow w-full flex items-center justify-center ${tahtaGenislikSiniri}`}>
-                <Board board={board} onSquareClick={handleSquareClick} onDropAction={handleDragDrop} highlightedPiece={pieceToSwap || selectedPiece} validMoves={validMoves} currentPlayer={currentPlayer} perspectivePlayer={isOnlineMode ? myOnlineTeam : currentPlayer} lastCombatCoords={lastCombatCoords} lang={lang} />
+                <Board board={board} onSquareClick={handleSquareClick} onDropAction={handleDragDrop} highlightedPiece={pieceToSwap || selectedPiece} validMoves={validMoves} currentPlayer={currentPlayer} perspectivePlayer={isOnlineMode ? myOnlineTeam : currentPlayer} lastCombatCoords={lastCombatCoords} lastMove={lastMove} lang={lang} />
                 {(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && (
                     <div className={`absolute top-1/2 -translate-y-1/2 z-30 w-72 max-w-[85%] ${setupSide === 'left' ? 'left-3' : 'right-3'}`}>
                         <SetupUI piecesToPlace={piecesToPlace} selectedPieceName={selectedPieceToPlace?.name} onPieceSelect={setSelectedPieceToPlace} onAutoSetup={handleAutoSetup} onClearSetup={handleClearSetup} onFinishSetup={handleReady} isWaitingOpponent={isWaitingOpponentSetup} lang={lang} player={setupPlayer} />

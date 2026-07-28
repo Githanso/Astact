@@ -13,6 +13,8 @@ interface BoardProps {
     perspectivePlayer?: Player | null;
     lang?: Language;
     lastCombatCoords?: Coords | null;
+    // Son hamlenin INDIGI kare ve onu oynayan takim; o karede halka animasyonu doner.
+    lastMove?: { coords: Coords; owner: Player } | null;
 }
 
 // Kenar koordinatlari: HER IKI oyuncunun dizilimi ayni anda gosterilir; her oyuncu
@@ -48,7 +50,7 @@ const rankStrip = (keyPrefix: string, labels: string[]) => (
     </div>
 );
 
-const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highlightedPiece, validMoves, currentPlayer, perspectivePlayer, lang, lastCombatCoords }) => {
+const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highlightedPiece, validMoves, currentPlayer, perspectivePlayer, lang, lastCombatCoords, lastMove }) => {
     return (
         <div className="w-full max-w-[900px] mx-auto flex flex-col items-center">
             {/* ust harf seridi — solda/sagda sayi seritleri kadar bosluk birakilir */}
@@ -83,6 +85,7 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highl
                                 perspectivePlayer={perspectivePlayer}
                                 lang={lang}
                                 isCombatSquare={!!lastCombatCoords && lastCombatCoords.row === rowIndex && lastCombatCoords.col === colIndex}
+                                rippleOwner={lastMove && lastMove.coords.row === rowIndex && lastMove.coords.col === colIndex ? lastMove.owner : null}
                                 isForest={!!forestMatch}
                                 forestDensity={forestMatch?.density || 2}
                             />

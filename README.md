@@ -767,6 +767,26 @@ yardımcısı eklendi — yalnızca **görünen etiket** çevriliyor, kimlik Tü
 `lang`, `Board → Square → Piece` zincirinden geçirildi; `SetupUI` zaten alıyordu.
 `Piece.tsx`'te sabit yazılmış "Bayrak" / "Bomba" etiketleri de tabloya bağlandı.
 
+### Hamlenin nereye yapıldığı görünmüyordu
+
+Rakip oynadığında tahtada ne değiştiğini fark etmek zordu: sade hamlelerde hiçbir işaret
+yoktu. `lastCombatCoords` vardı ama o **yalnızca çarpışma olunca** doluyor (`combat-shake`
+için), yani taş boş kareye ilerlediğinde hiçbir şey olmuyordu.
+
+Eklenen: taşın **indiği** karede genişleyip sönen halka (`moveRipple`, 0,65 sn).
+
+- Her `move_executed`'da çalışıyor — çarpışmalı da, sade hamle de.
+- Halka hamleyi **yapanın takım rengini** alıyor (kırmızı kehribar, mavi gök mavisi), yani
+  kimin oynadığı da belli oluyor. Takım bilgisi zaten sunucudan geliyor (`attackerTeam`).
+- Kareden **taşarak** büyüyor; kapsayıcıda `overflow-hidden` yok. Böylece hareketin nereye
+  olduğu komşu karelerden de ayırt ediliyor.
+- `pointer-events-none` şart: yoksa söndüğü 0,65 sn boyunca o karenin tıklamasını yutar ve
+  oyuncu yine "tıklama çalışmıyor" sanır.
+- Durum 700 ms sonra temizleniyor. Temizlenmezse aynı kareye ikinci kez inildiğinde element
+  DOM'da kaldığı için CSS animasyonu yeniden tetiklenmez.
+
+Tarayıcıda iki taraf için de doğrulandı (kırmızı ve mavi hamlesi ayrı ayrı).
+
 ### Hamle hataları ekranda hiç görünmüyordu
 
 `move_error` sunucudan geliyordu ama istemci onu yalnızca `onlineErrorMessage`'a yazıyordu —

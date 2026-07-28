@@ -1,5 +1,6 @@
 import React from 'react';
 import { Coords, Player, SquareState , Language } from '../types';
+import { PLAYERS } from '../constants';
 import Piece from './Piece';
 import ForestOverlay from './ForestOverlay';
 import LakeOverlay from './LakeOverlay';
@@ -17,6 +18,10 @@ interface SquareProps {
     lang?: Language;
     isCombatSquare?: boolean;
     forestDensity?: number;
+    // Tasin bu kareye YENI indigini gosteren halka. Hamleyi yapanin takimini
+    // tasiyor: halka o takimin rengini aliyor, boylece kimin oynadigi da belli
+    // oluyor. null = halka yok.
+    rippleOwner?: Player | null;
 }
 
 const Square: React.FC<SquareProps> = ({ 
@@ -31,7 +36,8 @@ const Square: React.FC<SquareProps> = ({
     isForest,
     forestDensity = 2,
     lang,
-    isCombatSquare = false
+    isCombatSquare = false,
+    rippleOwner = null
 }) => {
     let content = null;
     const activeViewPlayer = perspectivePlayer || currentPlayer;
@@ -109,6 +115,17 @@ const Square: React.FC<SquareProps> = ({
             
             {isSelectedHighlight && (
                 <div className="absolute inset-0 ring-4 ring-amber-300 bg-amber-500/20 z-30 pointer-events-none animate-pulse"></div>
+            )}
+
+            {/* Hamle halkasi. Kapsayicida overflow-hidden YOK: cember kareden tasarak
+                buyuyor. pointer-events-none sart, yoksa sondugu 0.65sn boyunca kareye
+                tiklamayi yutar ve oyuncu "tiklama calismiyor" sanar. */}
+            {rippleOwner && (
+                <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+                    <div className={`move-ripple w-full h-full rounded-full border-2 ${
+                        rippleOwner === PLAYERS.RED ? 'border-amber-300' : 'border-sky-300'
+                    }`}></div>
+                </div>
             )}
         </div>
     );
