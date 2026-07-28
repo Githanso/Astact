@@ -13,9 +13,10 @@ interface PieceData {
   id: string; name: string; rank: number; owner: Player;
   special: string | null; movable: boolean; revealed: boolean; hasMoved: boolean;
   row: number; col: number;
-  // Izci gorevini kullandi mi. Her Izci omrunde BIR kez dusman tasi acabiliyor;
-  // bayrak tas basina tutuluyor, oyuncu basina degil.
-  scoutUsed?: boolean;
+  // Izci gorevini SON kullandiginda sahibinin kacinci turuydu (turnCount degeri).
+  // null/undefined = hic kullanmadi, hazir. Bekleme suresi buradan olculuyor:
+  // sahibi SCOUT_COOLDOWN tur daha oynayinca hak yenileniyor.
+  scoutAt?: number | null;
 }
 
 interface StoredPlayer {
@@ -47,6 +48,10 @@ interface RoomData {
   // sonra siliniyor; bu sure oyunculara sonucu gorup "yeniden baslat" demeleri
   // icin birakiliyor. Yeniden baslatilinca null'a doner.
   gameOverAt: number | null;
+  // Her oyuncunun OYNADIGI tur sayisi (hamle veya Izci gorevi). Izci bekleme
+  // suresi bununla olculuyor. Zaman asimiyla kacirilan tur SAYILMIYOR: oyuncu
+  // bir sey yapmadi, bekleme suresini bosuna ilerletmemeli.
+  turnCount: [number, number];
 }
 
 // Oyunun neden bittigi. Istemci ekrandaki metni buna gore seciyor; "kazandin"
@@ -88,6 +93,10 @@ const DEFAULT_TURN_TIME_MS = 35_000;
 const MIN_TURN_TIME_MS = 5_000, MAX_TURN_TIME_MS = 600_000;
 // Istemcideki constants.ts MAX_MISSED_TURNS ile AYNI olmali.
 const MAX_MISSED_TURNS = 3;
+// Izci gorevini kullandiktan sonra hakkin yenilenmesi icin sahibinin oynamasi
+// gereken tur sayisi. Ilk kullanim bedava; bekleme ondan SONRA basliyor.
+// Istemcideki constants.ts SCOUT_COOLDOWN ile AYNI olmali.
+const SCOUT_COOLDOWN = 10;
 // Biten oyunun odasi bu sure sonra siliniyor. Oyunculara sonucu gorup yeniden
 // baslatmalari icin makul bir pencere; sonrasinda oda depoda yer kaplamasin.
 const ROOM_TTL_MS = 10 * 60_000;
@@ -112,6 +121,16 @@ export class GameRoom extends DurableObject {
         if (!Array.isArray(stored.missedTurns)) stored.missedTurns = [0, 0];
         if (stored.gameOverReason === undefined) stored.gameOverReason = stored.winner ? "FLAG" : null;
         if (stored.gameOverAt === undefined) stored.gameOverAt = stored.gamePhase === "GAME_OVER" ? Date.now() : null;
+        // Izci bekleme sayaci sonradan eklendi. Eski odalarda tas basina
+        // `scoutUsed: true` vardi; onu "0. turda kullanmis" sayiyoruz, boylece
+        // bekleme suresi dogal olarak isliyor ve hak kaybolmuyor.
+        if (!Array.isArray(stored.turnCount)) stored.turnCount = [0, 0];
+        for (const p of stored.players) {
+          if (!p) continue;
+          for (const tas of p.pieces) {
+            if (tas.scoutAt === undefined) tas.scoutAt = (tas as any).scoutUsed ? 0 : null;
+          }
+        }
         this.room = stored;
       }
     }
@@ -199,15 +218,24 @@ export class GameRoom extends DurableObject {
     };
   }
 
-  private buildBoardView(pieces: PieceData[], isOwn: boolean): any[] {
+  // Izci gorevine kac tur kaldi. 0 = hazir. scoutAt null ise hic kullanilmamis.
+  private scoutKalan(p: PieceData, oynananTur: number): number {
+    if (p.special !== "SCOUT") return 0;
+    if (p.scoutAt === null || p.scoutAt === undefined) return 0;
+    return Math.max(0, SCOUT_COOLDOWN - (oynananTur - p.scoutAt));
+  }
+
+  // oynananTur: taslarin SAHIBININ oynadigi tur sayisi (room.turnCount[slot]).
+  // Yalnizca isOwn=true iken anlamli; rakip taslarinda Izci durumu gonderilmiyor.
+  private buildBoardView(pieces: PieceData[], isOwn: boolean, oynananTur = 0): any[] {
     const board: any[][] = Array(BOARD_ROWS).fill(null).map(() => Array(BOARD_COLS).fill(null));
     LAKE_COORDS.forEach(l => { board[l.row][l.col] = "LAKE"; });
     for (const p of pieces) {
-      // scoutUsed YALNIZCA kendi taslarimizda gonderiliyor: istemci "bu Izci
-      // gorevini kullandi mi" bilgisini arayuzde gostermek icin kullaniyor.
-      // Rakibe sizarsa hangi Izcinin kullanildigi bilgisi ele verilirdi.
+      // Izci durumu YALNIZCA kendi taslarimizda gonderiliyor: rakibe sizarsa
+      // hangi Izcinin hazir oldugu bilgisi ele verilirdi. scoutIn = hakkin
+      // yenilenmesine kalan tur (0 = hazir).
       board[p.row][p.col] = isOwn || p.revealed
-        ? { id: p.id, name: p.name, rank: p.rank, owner: p.owner, special: p.special, movable: p.movable, revealed: p.revealed, hasMoved: p.hasMoved, position: { row: p.row, col: p.col }, ...(isOwn ? { scoutUsed: !!p.scoutUsed } : {}) }
+        ? { id: p.id, name: p.name, rank: p.rank, owner: p.owner, special: p.special, movable: p.movable, revealed: p.revealed, hasMoved: p.hasMoved, position: { row: p.row, col: p.col }, ...(isOwn && p.special === "SCOUT" ? { scoutIn: this.scoutKalan(p, oynananTur) } : {}) }
         : { owner: p.owner, revealed: false, position: { row: p.row, col: p.col } };
     }
     for (let r = 0; r < BOARD_ROWS; r++) for (let c = 0; c < BOARD_COLS; c++) if (board[r][c] === null && isForest(r, c)) board[r][c] = "FOREST";
@@ -290,7 +318,7 @@ export class GameRoom extends DurableObject {
       // Create room if new
       if (!this.room) {
         const code = this.ctx.id.name ?? url.searchParams.get("room") ?? "";
-        this.room = { code, players: [null, null], playerTokens: [null, null], disconnectedAt: [null, null], gamePhase: "LOBBY", winner: null, gameOverReason: null, restartRequested: [false, false], turnStartedAt: null, turnTimeMs: DEFAULT_TURN_TIME_MS, missedTurns: [0, 0], gameOverAt: null };
+        this.room = { code, players: [null, null], playerTokens: [null, null], disconnectedAt: [null, null], gamePhase: "LOBBY", winner: null, gameOverReason: null, restartRequested: [false, false], turnStartedAt: null, turnTimeMs: DEFAULT_TURN_TIME_MS, missedTurns: [0, 0], gameOverAt: null, turnCount: [0, 0] };
       }
       // Yerel bagli degisken: this.room uzerindeki daraltma ara fonksiyon
       // cagrilarinda kayboluyor, bu yuzden non-null referansi bir kez aliyoruz.
@@ -329,7 +357,7 @@ export class GameRoom extends DurableObject {
             // Yeniden baglanan oyuncu geri sayima turun KALAN suresinden devam etmeli.
             remainingMs: this.turnRemainingMs(),
             missedTurns: this.missedTurnsView(),
-            myBoard: this.buildBoardView(room.players[slot]!.pieces, true),
+            myBoard: this.buildBoardView(room.players[slot]!.pieces, true, room.turnCount[slot]),
             opponentBoard: this.buildBoardView(room.players[otherSlot]!.pieces, false),
             winner: room.winner,
             // Geri donen oyuncu "neden kaybettim/kazandim" metnini de almali.
@@ -361,7 +389,7 @@ export class GameRoom extends DurableObject {
           room.players[playerSlot]!.ready = true;
           room.players[playerSlot]!.pieces = (msg.placedPieces || []).map((p: any) => ({
             id: p.id, name: p.name, rank: p.rank, owner: p.owner,
-            special: p.special || null, movable: p.movable !== false, revealed: false, hasMoved: false, scoutUsed: false,
+            special: p.special || null, movable: p.movable !== false, revealed: false, hasMoved: false, scoutAt: null,
             row: p.position.row, col: p.position.col,
           }));
           // Tur suresini oda kurucusu (slot 0) belirler; iki oyuncu farkli preset
@@ -375,8 +403,8 @@ export class GameRoom extends DurableObject {
             room.turnStartedAt = Date.now();
             const p0 = room.players[0]!.pieces, p1 = room.players[1]!.pieces;
             const saat = { turnTimeMs: room.turnTimeMs, remainingMs: room.turnTimeMs };
-            this.sendTo(0, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p0, true), opponentPieces: this.buildBoardView(p1, false) });
-            this.sendTo(1, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p1, true), opponentPieces: this.buildBoardView(p0, false) });
+            this.sendTo(0, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p0, true, room.turnCount[0]), opponentPieces: this.buildBoardView(p1, false) });
+            this.sendTo(1, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p1, true, room.turnCount[1]), opponentPieces: this.buildBoardView(p0, false) });
           }
           await this.saveRoom();
           await this.scheduleAlarm();
@@ -405,6 +433,9 @@ export class GameRoom extends DurableObject {
           if (player.pieces.find(p => p.row === to.row && p.col === to.col)) { ws.send(JSON.stringify({ type: "move_error", code: "OWN_PIECE", message: "Kendi taşın var" })); return; }
           const targetPiece = opponent.pieces.find(p => p.row === to.row && p.col === to.col);
           const isForestTile = isForest(to.row, to.col);
+          // Hamle bu noktadan sonra kesin gecerli: tur sayaci burada artiyor.
+          // Izci bekleme suresi bu sayaci okuyor (bkz. scoutKalan).
+          room.turnCount[playerSlot]++;
           movedPiece.row = to.row; movedPiece.col = to.col; movedPiece.hasMoved = true;
           let combatResult = null, newWinner: string | null = null;
           if (targetPiece) {
@@ -439,8 +470,8 @@ export class GameRoom extends DurableObject {
             defenderName: !benSaldiran || targetPiece?.revealed ? combatResult.defender.name : null,
             defenderRank: !benSaldiran || targetPiece?.revealed ? combatResult.defender.rank : null,
           } : null;
-          this.sendTo(0, { ...base, combatResult: carpismaGorunumu(isP0), myBoard: this.buildBoardView(p0, true), opponentBoard: this.buildBoardView(p1, false) });
-          this.sendTo(1, { ...base, combatResult: carpismaGorunumu(!isP0), myBoard: this.buildBoardView(p1, true), opponentBoard: this.buildBoardView(p0, false) });
+          this.sendTo(0, { ...base, combatResult: carpismaGorunumu(isP0), myBoard: this.buildBoardView(p0, true, room.turnCount[0]), opponentBoard: this.buildBoardView(p1, false) });
+          this.sendTo(1, { ...base, combatResult: carpismaGorunumu(!isP0), myBoard: this.buildBoardView(p1, true, room.turnCount[1]), opponentBoard: this.buildBoardView(p0, false) });
           if (newWinner) { this.broadcast({ type: "game_over", winner: newWinner, reason: "FLAG" as GameOverReason }); }
           await this.saveRoom();
           await this.scheduleAlarm();
@@ -461,7 +492,8 @@ export class GameRoom extends DurableObject {
         // tasin sahibi tasinin desifre oldugunu FARK ETMEZ — istihbarat gizli kalir.
         // Tas yenilince zaten listeden dusuyor, "yenilene kadar gorunur" kendiliginden.
         case "scout": {
-          const yolla = (code: string) => { try { ws.send(JSON.stringify({ type: "move_error", code })); } catch (e) {} };
+          // n: mesajdaki {n} yerine gecen sayi (bekleme suresi icin kalan tur).
+          const yolla = (code: string, n?: number) => { try { ws.send(JSON.stringify({ type: "move_error", code, n })); } catch (e) {} };
           if (room.gamePhase === "PLAY_RED" && playerSlot !== 0) { yolla("NOT_YOUR_TURN"); return; }
           if (room.gamePhase === "PLAY_BLUE" && playerSlot !== 1) { yolla("NOT_YOUR_TURN"); return; }
           if (!isPlayPhase(room.gamePhase)) { yolla("NOT_YOUR_TURN"); return; }
@@ -472,7 +504,10 @@ export class GameRoom extends DurableObject {
           const izci = player.pieces.find(p => p.row === from.row && p.col === from.col);
           if (!izci) { yolla("PIECE_NOT_FOUND"); return; }
           if (izci.special !== "SCOUT") { yolla("SCOUT_NOT_SCOUT"); return; }
-          if (izci.scoutUsed) { yolla("SCOUT_USED"); return; }
+          // Ilk kullanim bedava; sonraki her hak icin sahibinin SCOUT_COOLDOWN tur
+          // daha OYNAMASI gerekiyor (zaman asimiyla kacirilan tur sayilmiyor).
+          const kalanTur = this.scoutKalan(izci, room.turnCount[playerSlot]);
+          if (kalanTur > 0) { yolla("SCOUT_COOLDOWN", kalanTur); return; }
           // Hedef: Izci ile AYNI SATIRDAKI herhangi bir dusman tasi. Sutun sinirlamasi
           // YOK — dusmanin dizilim sutunlariyla sinirlasaydik orman kurali olu kod
           // olurdu (orman kareleri yalnizca 4-6. sutunlarda, dizilim bolgeleri 0-3 ve
@@ -488,8 +523,11 @@ export class GameRoom extends DurableObject {
           }
           if (isForest(hedef.row, hedef.col)) { yolla("SCOUT_FOREST"); return; }
 
-          izci.scoutUsed = true;
           hedef.revealed = true;
+          // Once tur sayaci artiyor, SONRA damga vuruluyor: bekleme "bu turdan
+          // itibaren SCOUT_COOLDOWN tur daha" anlamina geliyor.
+          room.turnCount[playerSlot]++;
+          izci.scoutAt = room.turnCount[playerSlot];
           room.gamePhase = room.gamePhase === "PLAY_RED" ? "PLAY_BLUE" : "PLAY_RED";
           room.turnStartedAt = Date.now();
           const sp0 = room.players[0]!.pieces, sp1 = room.players[1]!.pieces;
@@ -501,8 +539,8 @@ export class GameRoom extends DurableObject {
           const sOrtak = { type: "scout_done", nextPhase: room.gamePhase, turnTimeMs: room.turnTimeMs, remainingMs: this.turnRemainingMs() };
           const sGizli = { scout: { row: izci.row, col: izci.col }, target: { row: hedef.row, col: hedef.col }, byTeam: player.team };
           const bakanSlot = playerSlot;
-          this.sendTo(0, { ...sOrtak, ...(bakanSlot === 0 ? sGizli : {}), myBoard: this.buildBoardView(sp0, true), opponentBoard: this.buildBoardView(sp1, false) });
-          this.sendTo(1, { ...sOrtak, ...(bakanSlot === 1 ? sGizli : {}), myBoard: this.buildBoardView(sp1, true), opponentBoard: this.buildBoardView(sp0, false) });
+          this.sendTo(0, { ...sOrtak, ...(bakanSlot === 0 ? sGizli : {}), myBoard: this.buildBoardView(sp0, true, room.turnCount[0]), opponentBoard: this.buildBoardView(sp1, false) });
+          this.sendTo(1, { ...sOrtak, ...(bakanSlot === 1 ? sGizli : {}), myBoard: this.buildBoardView(sp1, true, room.turnCount[1]), opponentBoard: this.buildBoardView(sp0, false) });
           await this.saveRoom();
           await this.scheduleAlarm();
           break;
@@ -529,6 +567,7 @@ export class GameRoom extends DurableObject {
             room.turnStartedAt = null; // dizilim asamasinda tur saati islemez
             room.gameOverAt = null;
             room.missedTurns = [0, 0];
+            room.turnCount = [0, 0]; // Izci bekleme sayaci da bastan baslar
             this.broadcast({ type: "game_restarted", roomState: this.getRoomState() });
           }
           await this.saveRoom();

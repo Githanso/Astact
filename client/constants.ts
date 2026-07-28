@@ -99,8 +99,8 @@ export const PIECE_COUNTS: { [key: string]: number } = {
   'Teğmen': 4,
   'Astsubay': 4,
   'Er': 5,
-  // Izci sayisi 2: artik hareket eden bir tas degil, sinirli bir ISTIHBARAT
-  // kaynagi (her Izci omrunde bir kez dusman tasi acar, bkz. server.ts "scout").
+  // Izci sayisi 2: artik siradan bir tas degil, ISTIHBARAT kaynagi. Ilk kullanim
+  // bedava, sonrasi SCOUT_COOLDOWN turluk bekleme (bkz. server.ts "scout").
   'İzci': 2,
   'İstihkamcı': 4,
   'Casus': 1,
@@ -111,6 +111,11 @@ export const PIECE_COUNTS: { [key: string]: number } = {
 // Bir oyuncu süresi dolduğu için tur kaçırdığında sayacı artar. İKİ oyuncu da bu
 // sınıra ulaşınca oyun berabere biter — kimse oynamıyorsa masayı boş bırakmamak için.
 export const MAX_MISSED_TURNS = 3;
+
+// Izci gorevini kullandiktan sonra hakkin yenilenmesi icin sahibinin oynamasi
+// gereken tur sayisi. Ilk kullanim bedava. src/server.ts SCOUT_COOLDOWN ile
+// AYNI olmali — sunucu karari veriyor, buradaki yalnizca arayuz metni icin.
+export const SCOUT_COOLDOWN = 10;
 
 export const TIMER_PRESETS: Record<TimerPreset, TimerConfig> = {
   FAST: { turnTime: 15, setupTime: 60, disconnectTime: 30 },
@@ -227,7 +232,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     errLAKE: 'Göl üzerine gidilemez.', errOWN_PIECE: 'Orada kendi taşınız var.',
     errSERVER_ERROR: 'Sunucu hatası.', errROOM_FULL: 'Oda dolu veya oyun çoktan başladı.',
     errSCOUT_NOT_SCOUT: 'Bu görevi yalnızca İzci yapabilir.',
-    errSCOUT_USED: 'Bu İzci görevini zaten kullandı.',
+    errSCOUT_COOLDOWN: 'Bu İzci {n} hamle sonra tekrar kullanılabilir.',
     errSCOUT_RANGE: 'İzci yalnızca kendi satırındaki düşman taşını görebilir.',
     errSCOUT_LAKE: 'Önünde göl var — görüş kapalı.',
     errSCOUT_FOREST: 'Ormandaki taşın kimliği görülemez.',
@@ -335,7 +340,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     errLAKE: 'Cannot move onto a lake.', errOWN_PIECE: 'Your own piece is there.',
     errSERVER_ERROR: 'Server error.', errROOM_FULL: 'The room is full or the game already started.',
     errSCOUT_NOT_SCOUT: 'Only the Scout can do this.',
-    errSCOUT_USED: 'This Scout has already used its mission.',
+    errSCOUT_COOLDOWN: 'This Scout can be used again in {n} moves.',
     errSCOUT_RANGE: 'The Scout can only see an enemy piece on its own row.',
     errSCOUT_LAKE: 'A lake blocks the line of sight.',
     errSCOUT_FOREST: 'A piece in the forest cannot be identified.',
@@ -443,7 +448,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     errLAKE: '湖には入れません。', errOWN_PIECE: 'そこには自分の駒があります。',
     errSERVER_ERROR: 'サーバーエラー。', errROOM_FULL: '部屋が満員か、ゲームがすでに開始しています。',
     errSCOUT_NOT_SCOUT: 'これができるのは斥候だけです。',
-    errSCOUT_USED: 'この斥候は任務を使い切りました。',
+    errSCOUT_COOLDOWN: 'この斥候はあと{n}手で再び使えます。',
     errSCOUT_RANGE: '斥候は同じ行の敵の駒しか見られません。',
     errSCOUT_LAKE: '湖に遮られて視界がありません。',
     errSCOUT_FOREST: '森の中の駒は識別できません。',
@@ -551,7 +556,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     errLAKE: '호수로는 갈 수 없습니다.', errOWN_PIECE: '거기에는 아군 기물이 있습니다.',
     errSERVER_ERROR: '서버 오류.', errROOM_FULL: '방이 가득 찼거나 게임이 이미 시작되었습니다.',
     errSCOUT_NOT_SCOUT: '이 임무는 정찰병만 수행할 수 있습니다.',
-    errSCOUT_USED: '이 정찰병은 이미 임무를 사용했습니다.',
+    errSCOUT_COOLDOWN: '이 정찰병은 {n}수 후에 다시 사용할 수 있습니다.',
     errSCOUT_RANGE: '정찰병은 같은 행의 적 기물만 볼 수 있습니다.',
     errSCOUT_LAKE: '호수에 가로막혀 시야가 없습니다.',
     errSCOUT_FOREST: '숲에 있는 기물은 식별할 수 없습니다.',

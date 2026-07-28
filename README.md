@@ -814,7 +814,7 @@ başkasını azaltmak şart.
 | Kural | Davranış |
 |---|---|
 | Kim | Yalnızca İzci (`special === 'SCOUT'`) |
-| Kaç kez | Her İzci ömründe **bir** kez (`scoutUsed`, taş başına) |
+| Kaç kez | İlk kullanım bedava; sonra sahibi **10 tur oynayınca** hak yenilenir (`scoutAt` + `SCOUT_COOLDOWN`, taş başına) |
 | Hedef | İzci ile **aynı satırdaki** herhangi bir düşman taşı |
 | Göl | İzci ile hedef arasında göl varsa görüş kapalı |
 | Orman | Hedef orman karesindeyse kimliği görülemez |
@@ -839,9 +839,17 @@ gönderiliyor.
 Arayüzde hedefler **camgöbeği + göz ikonu** ile işaretli; hamle kareleri kehribar. İkisi aynı
 renk olsaydı oyuncu saldırı sanıp turunu harcayabilirdi.
 
-**Belirtilmemiş olup benim karar verdiğim iki nokta:** görevin tur harcaması ve her İzci'nin
-bunu bir kez yapabilmesi. Gerekçe: bedeli olmasaydı oyunun ilk iki turunda iki İzci de
-kullanılır, karar kalmazdı. İkisi de tek satırlık değişiklikle gevşetilebilir.
+**Bekleme süresi sahibinin OYNADIĞI turlarla ölçülüyor** (`turnCount[slot]`), toplam hamleyle
+değil. Zaman aşımıyla kaçırılan tur sayılmıyor: oyuncu bir şey yapmadıysa bekleme süresi de
+ilerlememeli. Sayaç `SCOUT_COOLDOWN` sabitinde ve iki dosyada birden tanımlı (`src/server.ts`
++ `client/constants.ts`) — kararı sunucu veriyor, istemcideki yalnızca arayüz metni için.
+
+Kalan tur sayısı reddedilen denemede oyuncuya bildiriliyor: sunucu `move_error` içine `n`
+koyuyor, istemci çeviri metnindeki `{n}` yerine basıyor ("Bu İzci 7 hamle sonra tekrar
+kullanılabilir.").
+
+**Belirtilmemiş olup benim karar verdiğim nokta:** görevin tur harcaması. Bedeli olmasaydı
+istihbarat bedava olurdu. Tek satırlık değişiklikle gevşetilebilir.
 
 ### Hamlenin nereye yapıldığı görünmüyordu
 

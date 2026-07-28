@@ -192,7 +192,10 @@ const App: React.FC = () => {
             // kaliyordu; modal sonradan acildiginda coktan gecmis bir hamle hatasi
             // hala duruyordu. Oda seviyesindeki hatalar (room_error) orada kalmaya
             // devam ediyor, onlar zaten modalin konusu.
-            case 'move_error': setMoveError(prev => ({ metin: TR_CODE(msg.code, msg.message), no: (prev?.no ?? 0) + 1 })); break;
+            // msg.n varsa metindeki {n} onunla degistiriliyor (Izci bekleme suresi
+            // gibi sayili mesajlar icin). Ceviri anahtarlari dort dilde de {n}
+            // tasiyor, sunucu yalnizca sayiyi yolluyor.
+            case 'move_error': setMoveError(prev => ({ metin: TR_CODE(msg.code, msg.message).replace(/\{n\}/g, String(msg.n ?? '')), no: (prev?.no ?? 0) + 1 })); break;
             // Izci gorevi sonucu. Tahta bastan kuruluyor: acilan tas artik rakip
             // gorunumunde ad/rutbe ile geliyor. Gorev TUR HARCIYOR, o yuzden faz da
             // degisiyor. Halka animasyonu ACILAN karede donuyor — hamle olmasa da
@@ -481,7 +484,9 @@ const App: React.FC = () => {
     const scoutTargets = useMemo<Coords[]>(() => {
         if (!isOnlineMode || !myOnlineTeam || !selectedPiece) return [];
         if (!gamePhase.startsWith('PLAY') || currentPlayer !== myOnlineTeam) return [];
-        if (selectedPiece.special !== SpecialAbility.SCOUT || selectedPiece.scoutUsed) return [];
+        // scoutIn > 0 ise bekleme suresi dolmamis; hedef gostermiyoruz ki oyuncu
+        // bosuna tiklayip hata almasin.
+        if (selectedPiece.special !== SpecialAbility.SCOUT || (selectedPiece.scoutIn ?? 0) > 0) return [];
         const r = selectedPiece.position.row, izciCol = selectedPiece.position.col;
         const hedefler: Coords[] = [];
         // Satirin TAMAMI taraniyor: hedef dusmanin dizilim sutunlarinda olmak

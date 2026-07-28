@@ -47,6 +47,29 @@ const check = (ok, label, extra = "") => {
   if (!ok) fails++;
 };
 
+// src/server.ts SCOUT_COOLDOWN ile ayni olmali.
+const SCOUT_COOLDOWN = 10;
+
+// Tur harcamak icin taslari DIKEY oynatan yardimci (yatayda geri adim yasak,
+// ileri geri gidilemezdi). Konumu GERCEKTEN takip ediyor ve yalnizca hamle
+// kabul edilirse ilerletiyor — sabit bir yon dizisi kullansaydik, reddedilen
+// tek bir hamle sonraki butun hamleleri bozar ve test sessizce yaniltirdi.
+function oynatici(p1, p2) {
+  let kRow = 7, mRow = 7;
+  const git = async (ws, kaynak, col, satir, gonderen) => {
+    const hedef = satir === 7 ? 6 : 7;
+    temizle(p1, p2);
+    ws.send(JSON.stringify({ type: "move", from: { row: satir, col }, to: { row: hedef, col } }));
+    await sleep(450);
+    const m = sonuncu(kaynak, "move_executed");
+    return { m, yeni: m ? hedef : satir };
+  };
+  return {
+    async kirmizi() { const r = await git(p1, p1, 7, kRow); kRow = r.yeni; return r.m; },
+    async mavi()    { const r = await git(p2, p2, 0, mRow); mRow = r.yeni; return r.m; },
+  };
+}
+
 // 5. satirda gol yok; 1. satirda 5-6. sutunlar gol (kirmizinin gorusunu keser).
 // (3,6) ve (5,5) orman. Bunlar client/constants.ts ile ayni.
 const KIRMIZI = [
@@ -59,6 +82,9 @@ const KIRMIZI = [
 const MAVI = [
   tas("m-bayrak", "Bayrak", 0, "2. Oyuncu", 9, 0, { movable: false }),
   tas("m-maresal", "Mareşal", 10, "2. Oyuncu", 5, 3),   // 5. satir, acik hedef
+  // Bekleme suresi dolduktan sonraki IKINCI gorev icin 5. satirda ayri hedef.
+  // (5,2) BOS birakiliyor: senaryo 3 orayi "bos hedef reddedilir" diye kullaniyor.
+  tas("m-yuzbasi", "Yüzbaşı", 6, "2. Oyuncu", 5, 1),
   tas("m-general", "General", 9, "2. Oyuncu", 1, 3),    // 1. satir, arada gol var
   tas("m-albay", "Albay", 8, "2. Oyuncu", 4, 3),        // baska satir
   tas("m-er", "Er", 2, "2. Oyuncu", 7, 0),
@@ -114,26 +140,67 @@ console.log("=== 1) GECERLI GOREV (5. satir, arada gol yok) ===");
   p1.close(); p2.close(); await sleep(400);
 }
 
-// ─── 2) Ayni Izci ikinci kez kullanamaz ────────────────────────────────────
-console.log("\n=== 2) HER IZCI OMRUNDE BIR KEZ ===");
+// ─── 2) Bekleme suresi: 10 turdan sonra hak yenileniyor ────────────────────
+// Ilk kullanim bedava. Sonra sahibi 10 tur OYNAYINCA hak geri geliyor. Sayacin
+// gercekten isledigini gormek icin turlar tek tek oynaniyor ve her turda kalan
+// sure kontrol ediliyor.
+console.log("\n=== 2) BEKLEME SURESI (10 tur) ===");
+{
+  const { p1, p2 } = await kur();
+  p1.send(JSON.stringify({ type: "scout", from: { row: 5, col: 7 }, target: { row: 5, col: 3 } }));
+  await sleep(900);
+  const ilk = await waitFor(p1, "scout_done");
+  check(!!ilk, "ilk kullanim gecti (bedava)");
+  const izciKare = (m) => m?.myBoard?.[5]?.[7];
+  check(izciKare(ilk)?.scoutIn === SCOUT_COOLDOWN, `kullanimdan sonra kalan ${SCOUT_COOLDOWN} tur`, `(${izciKare(ilk)?.scoutIn})`);
+
+  // Gorevden sonra sira MAVIDE. Her donguda once mavi, sonra kirmizi oynuyor;
+  // boylece kirmizinin tur sayaci turda bir artiyor.
+  // Turlar tek tek olculuyor: sondan bir onceki turda hakkin HALA gelmedigini,
+  // sonuncuda geldigini gormek istiyoruz. Yalnizca sona bakmak, sayacin dogru
+  // HIZDA isledigini gostermezdi.
+  const oyna = oynatici(p1, p2);
+  let kalan = SCOUT_COOLDOWN;
+  for (let i = 1; i <= SCOUT_COOLDOWN; i++) {
+    await oyna.mavi();
+    const m = await oyna.kirmizi();
+    kalan = izciKare(m)?.scoutIn;
+    if (i === SCOUT_COOLDOWN - 1) check(kalan === 1, `${i}. turdan sonra 1 tur kaldi`, `(${kalan})`);
+  }
+  check(kalan === 0, `${SCOUT_COOLDOWN} tur sonra hak YENILENDI`, `(scoutIn=${kalan})`);
+
+  await oyna.mavi(); // sira kirmiziya donsun
+  temizle(p1, p2);
+  p1.send(JSON.stringify({ type: "scout", from: { row: 5, col: 7 }, target: { row: 5, col: 1 } }));
+  await sleep(900);
+  const ikinci = sonuncu(p1, "scout_done");
+  check(!!ikinci, "ikinci gorev kabul edildi");
+  check(rakipKare(ikinci, 5, 1)?.name === "Yüzbaşı", "ikinci hedefin kimligi acildi", `(${rakipKare(ikinci, 5, 1)?.name})`);
+  check(rakipKare(ikinci, 5, 3)?.name === "Mareşal", "ilk acilan tas HALA acik (oyun bitene kadar)", `(${rakipKare(ikinci, 5, 3)?.name})`);
+  p1.close(); p2.close(); await sleep(400);
+}
+
+// ─── 2b) Bekleme dolmadan denenirse reddediliyor ve KALAN bildiriliyor ──────
+console.log("\n=== 2b) BEKLEME DOLMADAN RED ===");
 {
   const { p1, p2 } = await kur();
   p1.send(JSON.stringify({ type: "scout", from: { row: 5, col: 7 }, target: { row: 5, col: 3 } }));
   await sleep(900);
   check(!!(await waitFor(p1, "scout_done")), "ilk kullanim gecti");
 
-  // Sira maviye gecti; maviyi oynatip sirayi geri alalim.
+  // Gorevden sonra sira mavide: bir mavi + bir kirmizi tur oynatiyoruz, yani
+  // kirmizi TEK tur oynamis oluyor.
+  const oyna = oynatici(p1, p2);
+  await oyna.mavi();
+  await oyna.kirmizi();
+  await oyna.mavi();
   temizle(p1, p2);
-  p2.send(JSON.stringify({ type: "move", from: { row: 7, col: 0 }, to: { row: 7, col: 1 } }));
-  await sleep(900);
-  check(!!(await waitFor(p2, "move_executed")), "mavi oynadi, sira kirmiziya dondu");
-
-  temizle(p1, p2);
-  p1.send(JSON.stringify({ type: "scout", from: { row: 5, col: 7 }, target: { row: 5, col: 3 } }));
+  p1.send(JSON.stringify({ type: "scout", from: { row: 5, col: 7 }, target: { row: 5, col: 1 } }));
   await sleep(900);
   const hata = sonuncu(p1, "move_error");
-  check(hata?.code === "SCOUT_USED", "ayni Izci ikinci kez kullanamadi", `(${hata?.code})`);
-  check(!sonuncu(p1, "scout_done") || p1.messages.filter(m => m.type === "scout_done").length === 0, "ikinci gorev islenmedi");
+  check(hata?.code === "SCOUT_COOLDOWN", "bekleme dolmadan reddedildi", `(${hata?.code})`);
+  check(hata?.n === SCOUT_COOLDOWN - 1, "kalan tur sayisi bildirildi", `(n=${hata?.n}, beklenen ${SCOUT_COOLDOWN - 1})`);
+  check(!sonuncu(p1, "scout_done"), "gorev islenmedi");
   p1.close(); p2.close(); await sleep(400);
 }
 
