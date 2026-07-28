@@ -404,12 +404,27 @@ export class GameRoom extends DurableObject {
           // Yeni tur burada basliyor; oyun bittiyse saat duruyor.
           room.turnStartedAt = room.gamePhase === "GAME_OVER" ? null : Date.now();
           const p0 = room.players[0]!.pieces, p1 = room.players[1]!.pieces;
-          const base = { type: "move_executed", from, to, nextPhase: room.gamePhase, winner: newWinner, turnTimeMs: room.turnTimeMs, remainingMs: this.turnRemainingMs() };
+          // attackerTeam: istemci carpisma gecmisinde hangi tasin kime ait oldugunu
+          // bundan turetiyor. Mesajdan cikarilamiyor: nextPhase oyun bittiginde
+          // GAME_OVER oluyor ve sirayi kimin oynadigi kayboluyor.
+          const base = { type: "move_executed", from, to, nextPhase: room.gamePhase, winner: newWinner, attackerTeam: player.team, turnTimeMs: room.turnTimeMs, remainingMs: this.turnRemainingMs() };
           const isP0 = playerSlot === 0;
-          const cP0 = combatResult ? { outcome: combatResult.outcome, attackerName: isP0 ? combatResult.attacker.name : (movedPiece.revealed ? combatResult.attacker.name : null), attackerRank: isP0 ? combatResult.attacker.rank : (movedPiece.revealed ? combatResult.attacker.rank : null), defenderName: !isP0 ? combatResult.defender.name : (targetPiece?.revealed ? combatResult.defender.name : null), defenderRank: !isP0 ? combatResult.defender.rank : (targetPiece?.revealed ? combatResult.defender.rank : null) } : null;
-          const cP1 = combatResult ? { outcome: combatResult.outcome, attackerName: !isP0 ? combatResult.attacker.name : (movedPiece.revealed ? combatResult.attacker.name : null), attackerRank: !isP0 ? combatResult.attacker.rank : (movedPiece.revealed ? combatResult.attacker.rank : null), defenderName: isP0 ? combatResult.defender.name : (targetPiece?.revealed ? combatResult.defender.name : null), defenderRank: isP0 ? combatResult.defender.rank : (targetPiece?.revealed ? combatResult.defender.rank : null) } : null;
-          this.sendTo(0, { ...base, combatResult: cP0, myBoard: this.buildBoardView(p0, true), opponentBoard: this.buildBoardView(p1, false) });
-          this.sendTo(1, { ...base, combatResult: cP1, myBoard: this.buildBoardView(p1, true), opponentBoard: this.buildBoardView(p0, false) });
+          // Carpisma sonucu her oyuncu icin AYRI kurgulanir: kendi tasini her zaman
+          // gorursun, rakibinkini yalnizca ACIGA CIKTIYSA (ormanda kalan gizli kalir).
+          // Iki tarafi ayri ayri elle yazmak mirror hatasina davetiyeydi; tek yerden
+          // uretiliyor ve "ben saldiran tarafta miyim" parametresiyle donuyor.
+          const carpismaGorunumu = (benSaldiran: boolean) => combatResult ? {
+            outcome: combatResult.outcome,
+            attackerName: benSaldiran || movedPiece.revealed ? combatResult.attacker.name : null,
+            attackerRank: benSaldiran || movedPiece.revealed ? combatResult.attacker.rank : null,
+            // Ozel yetenek de kimlik bilgisidir: istemci "Istihkamci Bombayi imha etti"
+            // metnini buna gore seciyor, o yuzden ad/rutbe ile AYNI kosula bagli.
+            attackerSpecial: benSaldiran || movedPiece.revealed ? combatResult.attacker.special : null,
+            defenderName: !benSaldiran || targetPiece?.revealed ? combatResult.defender.name : null,
+            defenderRank: !benSaldiran || targetPiece?.revealed ? combatResult.defender.rank : null,
+          } : null;
+          this.sendTo(0, { ...base, combatResult: carpismaGorunumu(isP0), myBoard: this.buildBoardView(p0, true), opponentBoard: this.buildBoardView(p1, false) });
+          this.sendTo(1, { ...base, combatResult: carpismaGorunumu(!isP0), myBoard: this.buildBoardView(p1, true), opponentBoard: this.buildBoardView(p0, false) });
           if (newWinner) { this.broadcast({ type: "game_over", winner: newWinner, reason: "FLAG" as GameOverReason }); }
           await this.saveRoom();
           await this.scheduleAlarm();

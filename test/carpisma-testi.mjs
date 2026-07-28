@@ -112,6 +112,10 @@ console.log("=== 1) YUKSEK RUTBE ALCAGI YENER (acik alan) ===");
   check(m1?.combatResult?.defenderName === "Er", "saldiran, yendigi tasi ogrendi", `(${m1?.combatResult?.defenderName})`);
   check(m2?.combatResult?.attackerName === "Üsteğmen" && m2?.combatResult?.attackerRank === 5,
         "acik alanda kazanan saldiran ACIGA CIKTI", `(${m2?.combatResult?.attackerName}/${m2?.combatResult?.attackerRank})`);
+  // Kimin oynadigi gizli bilgi degil (tahtada zaten gorunuyor); istemci carpisma
+  // gecmisinde taslari buna gore renklendiriyor.
+  check(m1?.attackerTeam === "1. Oyuncu" && m2?.attackerTeam === "1. Oyuncu",
+        "saldiranin takimi iki tarafa da bildirildi", `(${m1?.attackerTeam}/${m2?.attackerTeam})`);
   const kare = m2?.opponentBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col];
   check(kare?.revealed === true && kare?.rank === 5, "tahtada da acik gorunuyor", `(revealed=${kare?.revealed} rank=${kare?.rank})`);
   check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "yenilen tas tahtadan kalkti");
@@ -128,6 +132,7 @@ console.log("\n=== 2) ZAYIF SALDIRAN OLUR ===");
   await hamle(p1, p2, p1, { row: 9, col: 10 }, { row: 9, col: 9 });
   const { m1, m2 } = await hamle(p1, p2, p2, ACIK_HEDEF, ACIK_SALDIRAN);
   check(m2?.combatResult?.outcome === "DEFENDER_WINS", "rutbe 2 < rutbe 7, saldiran oldu", `(${m2?.combatResult?.outcome})`);
+  check(m2?.attackerTeam === "2. Oyuncu", "saldiran takim mavi olarak bildirildi", `(${m2?.attackerTeam})`);
   check(m2?.combatResult?.defenderName === "Binbaşı", "olen saldiranin sahibi savunani ogrendi", `(${m2?.combatResult?.defenderName})`);
   check(m1?.myBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]?.name === "Binbaşı", "savunan yerinde kaldi");
   check(bos(m1?.opponentBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]) && bos(m1?.opponentBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]),
@@ -160,6 +165,10 @@ console.log("\n=== 4) ISTIHKAMCI BOMBAYI IMHA EDER ===");
   check(m1?.combatResult?.outcome === "ATTACKER_WINS", "rutbe 1 olmasina ragmen bombayi aldi", `(${m1?.combatResult?.outcome})`);
   check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "bomba tahtadan kalkti");
   check(m2?.opponentBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]?.name === "İstihkamcı", "istihkamci kareye gecti");
+  // Istemci "Istihkamci Bombayi imha etti" metnini bu alana gore seciyor; gelmezse
+  // yerine "rutbesi buyuk olan yendi" basiliyordu (1 > 11 diyen yanlis cumle).
+  check(m1?.combatResult?.attackerSpecial === "MINER" && m2?.combatResult?.attackerSpecial === "MINER",
+        "ozel yetenek iki tarafa da bildirildi", `(${m1?.combatResult?.attackerSpecial}/${m2?.combatResult?.attackerSpecial})`);
   await kapat(p1, p2);
 }
 
@@ -172,6 +181,7 @@ console.log("\n=== 5) CASUS MARESAL'I ALIR ===");
   const { m1 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
   check(m1?.combatResult?.outcome === "ATTACKER_WINS", "casus maresali yendi", `(${m1?.combatResult?.outcome})`);
   check(m1?.combatResult?.defenderName === "Mareşal", "yenilen maresal oldugu bildirildi", `(${m1?.combatResult?.defenderName})`);
+  check(m1?.combatResult?.attackerSpecial === "SPY", "casus yetenegi bildirildi", `(${m1?.combatResult?.attackerSpecial})`);
   await kapat(p1, p2);
 }
 
@@ -218,6 +228,8 @@ console.log("\n=== 8) ORMANDA KAZANAN SALDIRAN GIZLI KALIR ===");
   check(m2?.combatResult?.attackerName === null && m2?.combatResult?.attackerRank === null,
         "rakip saldiranin kim oldugunu OGRENEMEDI",
         `(${m2?.combatResult?.attackerName}/${m2?.combatResult?.attackerRank})`);
+  // Ozel yetenek de kimlik: "MINER" sizsa rakip tasin Istihkamci oldugunu anlardi.
+  check(m2?.combatResult?.attackerSpecial === null, "ozel yetenek de sizmiyor", `(${m2?.combatResult?.attackerSpecial})`);
   const kare = m2?.opponentBoard?.[ORMAN_HEDEF.row]?.[ORMAN_HEDEF.col];
   check(kare?.revealed === false && kare?.rank === undefined && kare?.name === undefined,
         "tahtada da rutbe/isim sizmiyor", `(${JSON.stringify(kare)})`);
@@ -242,6 +254,10 @@ console.log("\n=== 9) ORMANDA KAZANAN SAVUNAN GIZLI KALIR ===");
 }
 
 // ─── 10) Bayrak alinirsa oyun biter ───────────────────────────────────────
+// NOT: sunucu bayragi ACIGA CIKARMIYOR (GAME_OVER dali targetPiece.revealed'i
+// set etmiyor), yani ALAN oyuncuya defenderName null gidiyor. Istemci bunu
+// outcome === "GAME_OVER" oldugu icin "Bayrak" diye turetiyor; carpisma
+// gecmisinde "???" yazmasin diye. Burada bu alan bilerek olculmuyor.
 console.log("\n=== 10) BAYRAK ALINIRSA OYUN BITER ===");
 {
   const { p1, p2 } = await kur(

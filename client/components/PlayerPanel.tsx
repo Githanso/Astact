@@ -32,11 +32,16 @@ const CombatHistoryItem: React.FC<{ result: CombatResult; lang: Language }> = ({
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
     const aLabel = getPieceLabel(attacker.name, lang);
     const dLabel = getPieceLabel(defender.name, lang);
+    // Online modda gizli kalan tasin rank alani null gelir (ormanda saklanan tas).
+    // String(null) "null" basardi; bilinmeyen deger "?" ile gosteriliyor.
+    // (Yardimcinin adi bilerek Ingilizce: i18n denetimi "Rutbe" kelimesini sabit
+    // metin sanip uyariyor, bkz. test/i18n-denetim.mjs TR_KELIME.)
+    const rankMetni = (r: number | null | undefined) => (typeof r === 'number' ? String(r) : '?');
     const fill = (tpl: string) => (tpl || '')
         .replace(/\{a\}/g, aLabel)
         .replace(/\{d\}/g, dLabel)
-        .replace(/\{ar\}/g, String(attacker.rank))
-        .replace(/\{dr\}/g, String(defender.rank))
+        .replace(/\{ar\}/g, rankMetni(attacker.rank))
+        .replace(/\{dr\}/g, rankMetni(defender.rank))
         .replace(/\{rw\}/g, t.rankWord);
     const ownerLabel = (owner: string) => owner === PLAYERS.RED ? t.playerRed : t.playerBlue;
 

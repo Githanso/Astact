@@ -752,6 +752,44 @@ yardımcısı eklendi — yalnızca **görünen etiket** çevriliyor, kimlik Tü
 `lang`, `Board → Square → Piece` zincirinden geçirildi; `SetupUI` zaten alıyordu.
 `Piece.tsx`'te sabit yazılmış "Bayrak" / "Bomba" etiketleri de tabloya bağlandı.
 
+### Online çarpışma geçmişi yanlış bilgi basıyordu
+
+`npm run test:carpisma` yazılırken çıktı: sunucudan gelen `combatResult`, panonun
+beklediği `CombatResult`'a çevrilirken (`App.tsx`, `move_executed`) **yalnızca `name` ve
+`rank`** dolduruluyordu. Eksik iki alanın üç ayrı sonucu vardı:
+
+| Belirti | Sebep |
+|---|---|
+| Çarpışma geçmişinde **iki taş da** "2. Oyuncu" etiketiyle ve mavi renkte | `owner` hiç set edilmiyordu; `PlayerPanel` `owner === PLAYERS.RED` diye bakıyor, `undefined` hiçbir zaman tutmuyordu |
+| İstihkamcı ve Casus mesajları **hiç görünmüyordu** | `special` hiç set edilmiyordu; `PlayerPanel` özel metni ona göre seçiyor |
+| Ormanda gizlenen taş "Rütbe **0**" diye gösteriliyordu | `attackerRank ?? 0` — ama 0 gerçek bir rütbe (Bayrak) |
+
+İkincisi kozmetik değildi: İstihkamcı bombayı aldığında ekranda **"İstihkamcı (Rütbe 1) >
+Bomba (Rütbe 11) — Rütbesi büyük olan yendi"** yazıyordu. Kendi içinde çelişen, oyuncuya
+kuralı yanlış öğreten bir cümle. Casus/Mareşal'de de aynısı.
+
+Düzeltme üç parçalı:
+
+- **Sunucu** `move_executed` içine `attackerTeam` ekliyor. İstemci bunu mesajdan
+  çıkaramıyordu: `nextPhase` oyun bitince `GAME_OVER` oluyor ve sırayı kimin oynadığı
+  kayboluyor.
+- **Sunucu** `attackerSpecial` gönderiyor — ad/rütbe ile **aynı görünürlük koşuluna** bağlı.
+  Özel yetenek de kimlik bilgisi: ormanda gizlenen taş için `"MINER"` sızsaydı rakip taşın
+  İstihkamcı olduğunu anlardı. `test/carpisma-testi.mjs` bunu ayrıca ölçüyor.
+- **İstemci** `owner`/`special` alanlarını dolduruyor, rütbeyi bilinmiyorsa `null`
+  bırakıyor; `PlayerPanel` bilinmeyen rütbeyi `?` ile basıyor.
+
+Bu arada `cP0`/`cP1` — her oyuncu için ayrı ayrı elle yazılmış iki ayna nesne — tek bir
+`carpismaGorunumu(benSaldiran)` fonksiyonuna indirildi. Aynı görünürlük kuralını iki kez
+yazmak, yeni alan eklenirken birini unutmaya davetiyeydi; nitekim `attackerSpecial`
+eklenirken tam da bu olurdu. Refactor öncesi/sonrası davranış `test/carpisma-testi.mjs`
+ile sabitlendi (her iki saldırı yönü + orman gizlemesi iki taraflı ölçülüyor).
+
+**Ayrıca:** bayrağı **alan** oyuncuya `defenderName: null` gidiyor — `GAME_OVER` dalı
+`targetPiece.revealed`'ı set etmeyen tek dal. Geçmişte "???" yazıyordu. Sunucuyu
+değiştirmek yerine istemci bunu `outcome === 'GAME_OVER'` bilgisinden türetiyor: o sonuç
+zaten yalnızca savunan Bayrak'ken üretiliyor, yani sunucudan fazladan bilgi almaya gerek yok.
+
 ### Müzik: mp3 yerine sentezlenmiş ses çalıyordu
 
 v5'in `lib/soundFX.ts` dosyasında `game_music.mp3` **hiç kullanılmıyordu**;
