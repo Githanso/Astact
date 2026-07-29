@@ -1,6 +1,5 @@
 import React from 'react';
 import { BoardState, Coords, PlacedPiece, Player , Language } from '../types';
-import { FOREST_COORDS } from '../constants';
 import Square from './Square';
 
 interface BoardProps {
@@ -17,6 +16,9 @@ interface BoardProps {
     lastMove?: { coords: Coords; owner: Player } | null;
     // Secili Izci'nin gorebilecegi dusman kareleri (hamle degil, istihbarat hedefi).
     scoutTargets?: Coords[];
+    // Bu oyunun ormanlari. SABITTEN DEGIL sunucudan geliyor: arazi her oyunda
+    // yeniden uretiliyor, iki oyuncunun ayni tahtayi gormesi buna bagli.
+    forests?: { row: number; col: number; density: number }[];
 }
 
 // Kenar koordinatlari: HER IKI oyuncunun dizilimi ayni anda gosterilir; her oyuncu
@@ -52,7 +54,7 @@ const rankStrip = (keyPrefix: string, labels: string[]) => (
     </div>
 );
 
-const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highlightedPiece, validMoves, currentPlayer, perspectivePlayer, lang, lastCombatCoords, lastMove, scoutTargets = [] }) => {
+const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highlightedPiece, validMoves, currentPlayer, perspectivePlayer, lang, lastCombatCoords, lastMove, scoutTargets = [], forests = [] }) => {
     return (
         <div className="w-full max-w-[900px] mx-auto flex flex-col items-center">
             {/* ust harf seridi — solda/sagda sayi seritleri kadar bosluk birakilir */}
@@ -72,7 +74,7 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highl
                     row.map((square, colIndex) => {
                         const isMove = validMoves.some(m => m.row === rowIndex && m.col === colIndex);
                         const isSelected = highlightedPiece?.position.row === rowIndex && highlightedPiece?.position.col === colIndex;
-                        const forestMatch = FOREST_COORDS.find(f => f.row === rowIndex && f.col === colIndex);
+                        const forestMatch = forests.find(f => f.row === rowIndex && f.col === colIndex);
                         
                         return (
                             <Square

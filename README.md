@@ -149,46 +149,56 @@ satırlardı).
 
 Yeni düzen: **10 satır × 11 sütun**, oyuncular sağ-sol karşı karşıya.
 
-Tarafsız bant yalnızca 4-6. sütunlar; sağdaki şema o üç sütunu gösteriyor.
-
-```
-      sütun:  4 5 6
- satır 0      ♠ · ·      ░ mavi dizilim (0-3)   ▓ kırmızı dizilim (7-10)
-       1      ♠ ~ ~      ~ göl   ♠ orman   · boş
-       2      ♠ ~ ~
-       3      ♠ · ♠      dizilim: 4 sütun × 10 satır = 40 kare = 40 taş
-       4      · ♠ ·                → BOŞLUK YOK
-       5      · ♠ ·
-       6      · · ♠
-       7      ~ ~ ♠
-       8      ~ ~ ♠
-       9      · · ♠
-```
-
 - Dizilim alanı **tam 40 kare**, taş havuzu (`PIECE_COUNTS` toplamı 40) değişmedi.
-- Tarafsız bant 3 sütun × 10 satır = 30 kare — göller ve ormanlar rahat sığdı, orman rütbe
-  gizleme mekaniği korundu.
-- Desen **180° dönme simetrik**: `(r, c) → (9-r, 10-c)`. Üst uçta ağaç koridoru 4. sütunda
-  (mavinin yanında), alt uçta 6. sütunda (kırmızının yanında); göller her uçta koridorun
-  karşı tarafında. Tek istisna `(3,6)` ormanı — karşılığı olan `(6,4)` boş.
-- Ayna (sol-sağ) simetri **bilerek kullanılmadı**: koridoru tek sütuna koyup aynalasaydık
-  bir oyuncu koridora yandan girerken diğeri gölleri dolaşmak zorunda kalırdı. Dönme
-  simetrisinde iki oyuncu da kendi ucundaki koridora yandan giriyor.
-- `FOREST_COORDS` içindeki `density` yalnızca kaç ağaç çizileceğini belirler; kurala etkisi
-  yoktur.
 - **Hareket ekseni satırdan sütuna döndü.** Kırmızı sağda, sola ilerler (`dc < 0`); mavi
   solda, sağa ilerler (`dc > 0`). Yanal hareket artık satır ekseninde. Hem istemcideki
   `calculateValidMoves` hem sunucudaki doğrulama buna göre değişti.
 - Oran `aspect-[11/10]`, tahta tamamen ekrana sığıyor.
 
-**Not:** `BOARD_ROWS`/`BOARD_COLS` ve göl/orman koordinatları **iki dosyada birden** tanımlı
-(`client/constants.ts` ve `src/server.ts`) — birini değiştirirken diğerini de değiştirin,
-yoksa sunucu ile istemci farklı tahta görür. Bu ayrışma sessizdir: istemci geçerli gösterdiği
-bir hamleyi sunucu reddeder ve `move_error` oyun ekranında basılmadığı için kullanıcıya
-"tıklama çalışmıyor" gibi görünür. `npm run test:protokol` senaryo 3b artık iki listeyi
-**kare kare** karşılaştırıyor; istemci sabitlerini metin olarak okuyup sunucunun bildirdiği
-tahtayla eşleştiriyor. Testin gerçekten yakaladığı, bir gölü tek taraftan silip koşularak
-doğrulandı.
+### Arazi her oyunda yeniden üretiliyor
+
+Arazi eskiden sabitti (`LAKE_COORDS` / `FOREST_COORDS`, iki dosyada birden elle tutuluyordu).
+Artık **sunucu her oyun için üretiyor**; tek doğruluk kaynağı `RoomData.terrain`.
+
+Üretici sözleşmesi (`araziUret`, `src/server.ts`):
+
+| | Kural |
+|---|---|
+| Orman | Mavi bölgesi **10**, tarafsız bant **10**, kırmızı bölgesi **10** → toplam **30** |
+| Göl | Toplam **8 kare**, **yalnızca tarafsız bantta** (4-6. sütunlar) |
+| Göl blokları | {1, 2, 4} boyutlarından; üst yarıda 4 kare üretilip aynalandığı için olası bileşimler `4+4`, `2+2+2+2`, `(2+1+1)×2`, `(1+1+1+1)×2` |
+| Simetri | **180° dönme**: `(r,c) → (9-r, 10-c)` |
+| Üretim anı | LOBBY→SETUP geçişi ve her yeniden başlatma |
+
+**Simetri kontrol edilen değil, inşaat gereği garanti:** üretici her kareyi eklerken 180°
+eşini de birlikte ekliyor. Ayna (sol-sağ) yerine dönme seçildi — aynada bir oyuncu koridora
+yandan girerken diğeri gölleri dolaşmak zorunda kalırdı.
+
+**Geçilebilirlik kontrolü yok, gerekmiyor.** Sol-sağ geçişini tamamen kapatmak için göl
+bariyerinin 0. satırdan 9. satıra kadar **her satıra** değmesi gerekir → en az 10 kare.
+`GOL_KARE` 8 olduğu için bu imkânsız. Bu gerekçe `araziUret` üstünde yazılı: göl sayısı 10
+veya üzerine çıkarılırsa gerekçe düşer ve gerçek bir geçilebilirlik kontrolü gerekir.
+
+**Oyuncu bölgesindeki ormanlar da gizler.** İzci oradaki taşın kimliğini göremez, çarpışmada
+da açılmaz — yani bayrağı/bombayı ormana koymak yeni bir dizilim kararı. Orman kareleri
+dizilime engel değil (`handlePiecePlacement` ve `handleAutoSetup` `null || 'FOREST'` kabul
+ediyor), 40 taşlık yerleşim bozulmuyor.
+
+**İstemci araziyi artık sabitten değil sunucudan alıyor.** `createEmptyBoard(lakes)` göl
+listesini dışarıdan alıyor, `Board` ormanı prop olarak alıyor, İzci hedef hesabı `terrain`
+state'ini okuyor. `constants.ts`'teki listeler yalnızca sunucudan ilk mesaj gelene kadarki
+**varsayılan** olarak duruyor.
+
+> Bu geçişte bir hata yakalandı ve düzeltildi: `room_started_setup` tahtayı yeniden
+> kurmadığı için dizilim boyunca ekranda **varsayılan göller** kalıyordu — sunucu `(2,4)`'ü
+> göl bildirirken tarayıcı orayı boş çiziyordu. Artık arazi geldiğinde tahtanın göl hücreleri
+> tazeleniyor, konmuş taşlar korunarak.
+
+**Testler arazi koordinatı varsaymıyor.** `protokol` senaryo 3b üretici sözleşmesini
+doğruluyor (sayılar, bölgeler, simetri, çakışma). `carpisma` ve `izci` sabit tohumla
+(`?seed=`) çalışıyor ve kullanacakları kareleri **arazinin kendisinden** seçiyor; üretici
+ayarlanınca kendiliğinden uyum sağlıyorlar. Tohum yalnızca testler için: bağlantı URL'inden
+okunuyor, çünkü arazi `setup_complete`'ten önce üretiliyor.
 
 **Yan bulgu:** eski `grid-rows-15` sınıfı hiç CSS üretmiyordu — Tailwind'in varsayılan
 `grid-rows` değerleri 1-6 ile sınırlı ve `theme.extend` boştu. Tahta yalnızca `grid-cols-10`

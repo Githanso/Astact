@@ -52,6 +52,11 @@ interface RoomData {
   // suresi bununla olculuyor. Zaman asimiyla kacirilan tur SAYILMIYOR: oyuncu
   // bir sey yapmadi, bekleme suresini bosuna ilerletmemeli.
   turnCount: [number, number];
+  // Bu odanin arazisi. Her oyunda yeniden uretiliyor (LOBBY->SETUP gecisinde ve
+  // yeniden baslatmada). Tek dogruluk kaynagi burasi: istemci artik kendi
+  // sabitinden degil bu listeden ciziyor.
+  terrain: Arazi;
+  seed: number;
 }
 
 // Oyunun neden bittigi. Istemci ekrandaki metni buna gore seciyor; "kazandin"
@@ -59,28 +64,145 @@ interface RoomData {
 type GameOverReason = "FLAG" | "TIMEOUT_DRAW" | "OPPONENT_LEFT";
 
 const BOARD_ROWS = 10, BOARD_COLS = 11;
-// DIKKAT: iki liste de istemcideki constants.ts ile BIREBIR ayni olmali.
-// Ayrisirlarsa istemci gecerli gosterdigi bir hamleyi sunucu reddeder ve
-// hata mesaji oyun ekraninda gorunmedigi icin "tiklama calismiyor" gibi durur.
-// Tarafsiz bant 4-6. sutunlar. Desen 180 DERECE DONME simetrik: (r,c) -> (9-r, 10-c).
-// Ust ucta agac koridoru 4. sutunda (mavinin yaninda), alt ucta 6. sutunda
-// (kirmizinin yaninda); goller her ucta koridorun karsi tarafinda.
-const LAKE_COORDS = [
-  { row: 1, col: 5 }, { row: 1, col: 6 },
-  { row: 2, col: 5 }, { row: 2, col: 6 },
-  { row: 7, col: 4 }, { row: 7, col: 5 },
-  { row: 8, col: 4 }, { row: 8, col: 5 },
-];
-const FOREST_COORDS = [
-  { row: 0, col: 4 }, { row: 1, col: 4 }, { row: 2, col: 4 },
-  { row: 3, col: 4 }, { row: 3, col: 6 },
-  { row: 4, col: 5 },
-  { row: 5, col: 5 },
-  { row: 6, col: 6 },
-  { row: 7, col: 6 }, { row: 8, col: 6 }, { row: 9, col: 6 },
-];
-function isLake(r: number, c: number) { return LAKE_COORDS.some(l => l.row === r && l.col === c); }
-function isForest(r: number, c: number) { return FOREST_COORDS.some(f => f.row === r && f.col === c); }
+// Tarafsiz bant: 4-6. sutunlar. Dizilim bolgeleri mavi 0-3, kirmizi 7-10.
+const BANT_BAS = 4, BANT_SON = 6;
+
+interface Arazi {
+  lakes: { row: number; col: number }[];
+  forests: { row: number; col: number; density: number }[];
+}
+
+// Arazi ARTIK SABIT DEGIL: her oyunda uretiliyor (bkz. araziUret). Asagidaki
+// liste yalnizca GERIYE DONUK uyum icin duruyor — arazisi olmayan eski odalara
+// loadRoom migration'inda bu atanıyor.
+const ESKI_SABIT_ARAZI: Arazi = {
+  lakes: [
+    { row: 1, col: 5 }, { row: 1, col: 6 },
+    { row: 2, col: 5 }, { row: 2, col: 6 },
+    { row: 7, col: 4 }, { row: 7, col: 5 },
+    { row: 8, col: 4 }, { row: 8, col: 5 },
+  ],
+  forests: [
+    { row: 0, col: 4, density: 3 }, { row: 1, col: 4, density: 2 }, { row: 2, col: 4, density: 3 },
+    { row: 3, col: 4, density: 2 }, { row: 3, col: 6, density: 1 },
+    { row: 4, col: 5, density: 3 },
+    { row: 5, col: 5, density: 2 },
+    { row: 6, col: 6, density: 2 },
+    { row: 7, col: 6, density: 3 }, { row: 8, col: 6, density: 2 }, { row: 9, col: 6, density: 3 },
+  ],
+};
+
+// Arazi sozlesmesi. Degistirilirse test/protokol-testi.mjs senaryo 3b de guncellenmeli.
+const GOL_KARE = 8;          // toplam gol karesi (aynalanmis)
+const BANT_ORMAN = 10;       // tarafsiz banttaki orman (aynalanmis)
+const BOLGE_ORMAN = 10;      // HER oyuncunun bolgesindeki orman
+
+// 180 derece donme: (r,c) -> (9-r, 10-c). Kirmizinin bolgesi maviye, bandin ust
+// yarisi alt yarisina esleniyor. Ayna (sol-sag) yerine DONME secildi: ayna
+// simetride bir oyuncu koridora yandan girerken digeri golleri dolasmak zorunda
+// kalirdi (bkz. README, tarafsiz bant bolumu).
+const dondur = (r: number, c: number) => ({ row: BOARD_ROWS - 1 - r, col: BOARD_COLS - 1 - c });
+
+// Deterministik PRNG (mulberry32). Math.random KULLANILMIYOR: ayni seed ayni
+// tahtayi vermeli, testler ve hata ayiklama buna dayaniyor.
+function prng(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Araziyi uretir. Yalnizca UST yari / KIRMIZI bolge uretilip 180 derece
+// dondurulerek eslenir; boylece iki oyuncu birebir ayni zorlukla oynar.
+//
+// BAGLANTI KONTROLU YOK, gerekmiyor: sol-sag gecisi tamamen kapatmak icin gol
+// bariyerinin 0. satirdan 9. satira kadar HER SATIRA degmesi gerekir, yani en az
+// BOARD_ROWS (10) kare. GOL_KARE 8 oldugu icin bu imkansiz. GOL_KARE 10 veya
+// uzerine cikarilirsa bu gerekce duser ve gercek bir gecilebilirlik kontrolu
+// eklenmelidir.
+function araziUret(seed: number): Arazi {
+  const rnd = prng(seed);
+  const secim = <T,>(dizi: T[]): T => dizi[Math.floor(rnd() * dizi.length)];
+  const dolu = new Set<string>();
+  const anahtar = (r: number, c: number) => `${r},${c}`;
+
+  const lakes: Arazi["lakes"] = [];
+  const forests: Arazi["forests"] = [];
+  // Her ekleme kareyi VE 180 derece esini birlikte isaretler; simetri boylece
+  // sonradan dogrulanacak bir sey degil, insaat geregi garanti.
+  const isaretle = (r: number, c: number) => {
+    const e = dondur(r, c);
+    dolu.add(anahtar(r, c)); dolu.add(anahtar(e.row, e.col));
+    return e;
+  };
+  const golEkle = (r: number, c: number) => {
+    const e = isaretle(r, c);
+    lakes.push({ row: r, col: c }, { row: e.row, col: e.col });
+  };
+  const ormanEkle = (r: number, c: number) => {
+    const e = isaretle(r, c);
+    // Yogunluk yalnizca kac agac cizilecegini belirler; es kareler ayri yogunluk
+    // alabilir, kural etkilenmiyor.
+    forests.push({ row: r, col: c, density: 1 + Math.floor(rnd() * 3) },
+                 { row: e.row, col: e.col, density: 1 + Math.floor(rnd() * 3) });
+  };
+  const bos = (r: number, c: number) => {
+    const e = dondur(r, c);
+    return !dolu.has(anahtar(r, c)) && !dolu.has(anahtar(e.row, e.col));
+  };
+
+  // ── Goller: ust yarida GOL_KARE/2 kare uretilip aynalaniyor ───────────────
+  // Blok boyutlari {1,2,4}. Toplam iki esit yariya bolundugu icin kullanicinin
+  // ornegindeki 4+2+2 gibi tek sayili bilesimler cikmaz; olasi bilesimler
+  // 4+4, 2+2+2+2, (2+1+1)x2, (1+1+1+1)x2.
+  let kalanGol = GOL_KARE / 2;
+  let guvenlik = 0;
+  while (kalanGol > 0 && guvenlik++ < 200) {
+    const boy = secim([1, 2, 4].filter(b => b <= kalanGol));
+    // 4 -> 2x2, 2 -> dikey ikili, 1 -> tek kare
+    const yukseklik = boy === 4 ? 2 : boy === 2 ? 2 : 1;
+    const genislik = boy === 4 ? 2 : 1;
+    const r0 = Math.floor(rnd() * (5 - yukseklik + 1));               // ust yari: 0..4
+    const c0 = BANT_BAS + Math.floor(rnd() * (BANT_SON - BANT_BAS + 1 - genislik + 1));
+    let uygun = true;
+    for (let r = r0; r < r0 + yukseklik && uygun; r++)
+      for (let c = c0; c < c0 + genislik && uygun; c++)
+        if (!bos(r, c)) uygun = false;
+    if (!uygun) continue;
+    for (let r = r0; r < r0 + yukseklik; r++)
+      for (let c = c0; c < c0 + genislik; c++) golEkle(r, c);
+    kalanGol -= boy;
+  }
+
+  // ── Tarafsiz bant ormani: ust yarida BANT_ORMAN/2 kare ────────────────────
+  // Bant hucrelerinde donmenin sabit noktasi yok (r=4.5, c=5 tam sayi degil),
+  // yani her hucre bir esle ciftlenir; sayi her zaman tam tutar.
+  let kalanBant = BANT_ORMAN / 2;
+  guvenlik = 0;
+  while (kalanBant > 0 && guvenlik++ < 500) {
+    const r = Math.floor(rnd() * 5);
+    const c = BANT_BAS + Math.floor(rnd() * (BANT_SON - BANT_BAS + 1));
+    if (!bos(r, c)) continue;
+    ormanEkle(r, c);
+    kalanBant--;
+  }
+
+  // ── Oyuncu bolgesi ormani: kirmizida BOLGE_ORMAN, aynasi maviye ───────────
+  let kalanBolge = BOLGE_ORMAN;
+  guvenlik = 0;
+  while (kalanBolge > 0 && guvenlik++ < 500) {
+    const r = Math.floor(rnd() * BOARD_ROWS);
+    const c = 7 + Math.floor(rnd() * 4);
+    if (!bos(r, c)) continue;
+    ormanEkle(r, c);
+    kalanBolge--;
+  }
+
+  return { lakes, forests };
+}
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "TAK-"; for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -125,6 +247,12 @@ export class GameRoom extends DurableObject {
         // `scoutUsed: true` vardi; onu "0. turda kullanmis" sayiyoruz, boylece
         // bekleme suresi dogal olarak isliyor ve hak kaybolmuyor.
         if (!Array.isArray(stored.turnCount)) stored.turnCount = [0, 0];
+        // Arazi sonradan uretilir hale geldi; oncesinde kaydedilmis odalar eski
+        // SABIT araziyle devam etsin, yoksa oyun ortasinda tahta degisirdi.
+        if (!stored.terrain || !Array.isArray(stored.terrain.lakes)) {
+          stored.terrain = ESKI_SABIT_ARAZI;
+          stored.seed = 0;
+        }
         for (const p of stored.players) {
           if (!p) continue;
           for (const tas of p.pieces) {
@@ -215,7 +343,28 @@ export class GameRoom extends DurableObject {
       // Tur suresini oda kurucusu belirliyor; katilan oyuncu daha odaya girerken
       // gercek degeri gormeli, yoksa kendi presetiyle yanlis geri sayim yapar.
       turnTimeMs: r.turnTimeMs,
+      // Arazi her oyunda uretildigi icin istemci onu SUNUCUDAN almak zorunda;
+      // eskiden kendi sabitinden ciziyordu. roomState tasiyan her mesajda gidiyor.
+      terrain: r.terrain,
     };
+  }
+
+  // Yeni arazi uretip odaya yazar. Seed saklaniyor ki ayni tahta gerektiginde
+  // (hata ayiklama, test) yeniden uretilebilsin.
+  private araziYenile(seed?: number) {
+    const r = this.room;
+    if (!r) return;
+    r.seed = seed !== undefined && Number.isFinite(seed) ? (seed >>> 0) : (Math.floor(Math.random() * 0xFFFFFFFF) >>> 0);
+    r.terrain = araziUret(r.seed);
+  }
+
+  // Arazi sorgulari ODA VERISINDEN okunuyor (eskiden modul sabitiydi). Oda yoksa
+  // false donuyor; cagrildiklari her yerde room zaten yuklu.
+  private isLake(r: number, c: number): boolean {
+    return !!this.room?.terrain.lakes.some(l => l.row === r && l.col === c);
+  }
+  private isForest(r: number, c: number): boolean {
+    return !!this.room?.terrain.forests.some(f => f.row === r && f.col === c);
   }
 
   // Izci gorevine kac tur kaldi. 0 = hazir. scoutAt null ise hic kullanilmamis.
@@ -229,7 +378,7 @@ export class GameRoom extends DurableObject {
   // Yalnizca isOwn=true iken anlamli; rakip taslarinda Izci durumu gonderilmiyor.
   private buildBoardView(pieces: PieceData[], isOwn: boolean, oynananTur = 0): any[] {
     const board: any[][] = Array(BOARD_ROWS).fill(null).map(() => Array(BOARD_COLS).fill(null));
-    LAKE_COORDS.forEach(l => { board[l.row][l.col] = "LAKE"; });
+    (this.room?.terrain.lakes ?? []).forEach(l => { board[l.row][l.col] = "LAKE"; });
     for (const p of pieces) {
       // Izci durumu YALNIZCA kendi taslarimizda gonderiliyor: rakibe sizarsa
       // hangi Izcinin hazir oldugu bilgisi ele verilirdi. scoutIn = hakkin
@@ -238,7 +387,7 @@ export class GameRoom extends DurableObject {
         ? { id: p.id, name: p.name, rank: p.rank, owner: p.owner, special: p.special, movable: p.movable, revealed: p.revealed, hasMoved: p.hasMoved, position: { row: p.row, col: p.col }, ...(isOwn && p.special === "SCOUT" ? { scoutIn: this.scoutKalan(p, oynananTur) } : {}) }
         : { owner: p.owner, revealed: false, position: { row: p.row, col: p.col } };
     }
-    for (let r = 0; r < BOARD_ROWS; r++) for (let c = 0; c < BOARD_COLS; c++) if (board[r][c] === null && isForest(r, c)) board[r][c] = "FOREST";
+    for (let r = 0; r < BOARD_ROWS; r++) for (let c = 0; c < BOARD_COLS; c++) if (board[r][c] === null && this.isForest(r, c)) board[r][c] = "FOREST";
     return board;
   }
 
@@ -318,7 +467,7 @@ export class GameRoom extends DurableObject {
       // Create room if new
       if (!this.room) {
         const code = this.ctx.id.name ?? url.searchParams.get("room") ?? "";
-        this.room = { code, players: [null, null], playerTokens: [null, null], disconnectedAt: [null, null], gamePhase: "LOBBY", winner: null, gameOverReason: null, restartRequested: [false, false], turnStartedAt: null, turnTimeMs: DEFAULT_TURN_TIME_MS, missedTurns: [0, 0], gameOverAt: null, turnCount: [0, 0] };
+        this.room = { code, players: [null, null], playerTokens: [null, null], disconnectedAt: [null, null], gamePhase: "LOBBY", winner: null, gameOverReason: null, restartRequested: [false, false], turnStartedAt: null, turnTimeMs: DEFAULT_TURN_TIME_MS, missedTurns: [0, 0], gameOverAt: null, turnCount: [0, 0], terrain: ESKI_SABIT_ARAZI, seed: 0 };
       }
       // Yerel bagli degisken: this.room uzerindeki daraltma ara fonksiyon
       // cagrilarinda kayboluyor, bu yuzden non-null referansi bir kez aliyoruz.
@@ -336,6 +485,15 @@ export class GameRoom extends DurableObject {
 
       if (room.players[0] && room.players[1] && room.gamePhase === "LOBBY") {
         room.gamePhase = "SETUP";
+        // Arazi tam BURADA uretiliyor: oyuncular dizilim yaparken tahtayi
+        // gormeli. Daha erken uretmek (oda kurulurken) yanlis olmazdi ama daha
+        // gec uretmek — orn. oyun baslarken — dizilimi ezberden yaptirirdi.
+        // ?seed=... verilirse o tohumla uretilir. Arazi setup_complete'ten ONCE
+        // uretildigi icin seed'i mesajla almak gec kalirdi; baglanti URL'i tek
+        // makul yol. Pratikte yalnizca TESTLER kullaniyor: sabit tohum = sabit
+        // tahta, boylece orman/gol koordinatina dayanan senaryolar yazilabiliyor.
+        const seedParam = Number(url.searchParams.get("seed"));
+        this.araziYenile(Number.isFinite(seedParam) && url.searchParams.get("seed") ? seedParam : undefined);
       }
 
       await this.saveRoom();
@@ -353,6 +511,7 @@ export class GameRoom extends DurableObject {
           this.sendTo(slot, {
             type: "game_state_restored",
             gamePhase: room.gamePhase,
+            terrain: room.terrain,
             turnTimeMs: room.turnTimeMs,
             // Yeniden baglanan oyuncu geri sayima turun KALAN suresinden devam etmeli.
             remainingMs: this.turnRemainingMs(),
@@ -402,7 +561,7 @@ export class GameRoom extends DurableObject {
             room.gamePhase = "PLAY_RED";
             room.turnStartedAt = Date.now();
             const p0 = room.players[0]!.pieces, p1 = room.players[1]!.pieces;
-            const saat = { turnTimeMs: room.turnTimeMs, remainingMs: room.turnTimeMs };
+            const saat = { turnTimeMs: room.turnTimeMs, remainingMs: room.turnTimeMs, terrain: room.terrain };
             this.sendTo(0, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p0, true, room.turnCount[0]), opponentPieces: this.buildBoardView(p1, false) });
             this.sendTo(1, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p1, true, room.turnCount[1]), opponentPieces: this.buildBoardView(p0, false) });
           }
@@ -428,11 +587,11 @@ export class GameRoom extends DurableObject {
           if (Math.abs(dc) > 1 || Math.abs(dr) > 1) { ws.send(JSON.stringify({ type: "move_error", code: "ONE_SQUARE", message: "Bir kare hareket" })); return; }
           if (Math.abs(dr) + Math.abs(dc) !== 1) { ws.send(JSON.stringify({ type: "move_error", code: "STRAIGHT_ONLY", message: "Sadece düz hareket" })); return; }
           if (to.row < 0 || to.row >= BOARD_ROWS || to.col < 0 || to.col >= BOARD_COLS) { ws.send(JSON.stringify({ type: "move_error", code: "OUT_OF_BOUNDS", message: "Sınır dışı" })); return; }
-          if (isLake(to.row, to.col)) { ws.send(JSON.stringify({ type: "move_error", code: "LAKE", message: "Göl üzerine gidilemez" })); return; }
+          if (this.isLake(to.row, to.col)) { ws.send(JSON.stringify({ type: "move_error", code: "LAKE", message: "Göl üzerine gidilemez" })); return; }
           const opponent = room.players[playerSlot === 0 ? 1 : 0]!;
           if (player.pieces.find(p => p.row === to.row && p.col === to.col)) { ws.send(JSON.stringify({ type: "move_error", code: "OWN_PIECE", message: "Kendi taşın var" })); return; }
           const targetPiece = opponent.pieces.find(p => p.row === to.row && p.col === to.col);
-          const isForestTile = isForest(to.row, to.col);
+          const isForestTile = this.isForest(to.row, to.col);
           // Hamle bu noktadan sonra kesin gecerli: tur sayaci burada artiyor.
           // Izci bekleme suresi bu sayaci okuyor (bkz. scoutKalan).
           room.turnCount[playerSlot]++;
@@ -519,9 +678,9 @@ export class GameRoom extends DurableObject {
           // Aradaki kareler: iki sutun arasinda kalanlar (uc noktalar haric).
           const adim = target.col > izci.col ? 1 : -1;
           for (let c = izci.col + adim; c !== target.col; c += adim) {
-            if (isLake(izci.row, c)) { yolla("SCOUT_LAKE"); return; }
+            if (this.isLake(izci.row, c)) { yolla("SCOUT_LAKE"); return; }
           }
-          if (isForest(hedef.row, hedef.col)) { yolla("SCOUT_FOREST"); return; }
+          if (this.isForest(hedef.row, hedef.col)) { yolla("SCOUT_FOREST"); return; }
 
           hedef.revealed = true;
           // Once tur sayaci artiyor, SONRA damga vuruluyor: bekleme "bu turdan
@@ -568,6 +727,7 @@ export class GameRoom extends DurableObject {
             room.gameOverAt = null;
             room.missedTurns = [0, 0];
             room.turnCount = [0, 0]; // Izci bekleme sayaci da bastan baslar
+            this.araziYenile();      // "her oyunda arazi degissin" — rovans da yeni oyun
             this.broadcast({ type: "game_restarted", roomState: this.getRoomState() });
           }
           await this.saveRoom();

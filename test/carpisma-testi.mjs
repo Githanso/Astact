@@ -30,13 +30,43 @@ const mavi = (id, name, rank, row, col, opts) => tas(id, name, rank, "2. Oyuncu"
 const KB = kirmizi("rb", "Bayrak", 0, 0, 10, { movable: false });
 const MB = mavi("mb", "Bayrak", 0, 0, 0, { movable: false });
 
-// (5,3) ve (5,2) acik alan; (5,5) ORMAN, (5,6) degil. 5. satirda gol yok
-// (goller 1-2 ve 7-8. satirlarda). Kirmizi sola ilerler, mavi saga.
-const ACIK_SALDIRAN = { row: 5, col: 3 }, ACIK_HEDEF = { row: 5, col: 2 };
-const ORMAN_SALDIRAN = { row: 5, col: 6 }, ORMAN_HEDEF = { row: 5, col: 5 };
+// ARAZI ARTIK SABIT DEGIL: her oyunda sunucuda uretiliyor. Bu yuzden hicbir
+// orman/gol koordinati varsayilmiyor; kareler her odada arazinin kendisinden
+// seciliyor. Kirmizi sola ilerler (dc<0), mavi saga.
+const golMu = (a, r, c) => a.lakes.some((l) => l.row === r && l.col === c);
+const ormanMu = (a, r, c) => a.forests.some((f) => f.row === r && f.col === c);
+const acikMi = (a, r, c) => !golMu(a, r, c) && !ormanMu(a, r, c);
+
+// Bayraklarin durdugu kareler secilemez, yoksa senaryo kazara bayrakla carpisir.
+const YASAK = ["0,10", "0,0"];
+const serbest = (r, c) => !YASAK.includes(`${r},${c}`);
+
+// Yan yana iki ACIK kare (hedef, saldiranin solunda). Acik alan senaryolari ve
+// orman senaryolarinin KONTROL GRUBU icin.
+function acikCift(a) {
+  for (let r = 0; r < 10; r++) for (let c = 1; c < 11; c++)
+    if (acikMi(a, r, c) && acikMi(a, r, c - 1) && serbest(r, c) && serbest(r, c - 1))
+      return { saldiran: { row: r, col: c }, hedef: { row: r, col: c - 1 } };
+  throw new Error("acik cift bulunamadi");
+}
+// Hedefi ORMAN olan cift: saldiran hedefin sagindaki acik karede.
+function ormanCift(a) {
+  for (const f of a.forests) {
+    const { row, col } = f;
+    if (col + 1 > 10) continue;
+    if (acikMi(a, row, col + 1) && serbest(row, col) && serbest(row, col + 1))
+      return { saldiran: { row, col: col + 1 }, hedef: { row, col } };
+  }
+  throw new Error("orman cifti bulunamadi");
+}
+
+// Sabit tohum: butun odalar AYNI araziyi alsin. Arazi her oyunda uretildigi
+// icin, tohum olmasaydi her senaryo baska bir tahtada calisir ve asagida bir
+// kez secilen kareler gecersiz olurdu.
+const SEED = 20260729;
 
 function connect(room, name, token, etiket) {
-  const ws = new WebSocket(`${BASE}?room=${room}&name=${name}&token=${token}`);
+  const ws = new WebSocket(`${BASE}?room=${room}&name=${name}&token=${token}&seed=${SEED}`);
   ws.messages = [];
   ws.addEventListener("message", (e) => {
     const m = JSON.parse(e.data);
@@ -69,6 +99,10 @@ const check = (ok, label, extra = "") => {
   if (!ok) fails++;
 };
 
+// Her senaryo AYNI seed ile oda kuruyor: arazi hepsinde ayni, dolayisiyla
+// yukarida bir kez hesaplanan kareler butun senaryolarda gecerli. Seed olmasaydi
+// her oda farkli arazi alir ve kareler senaryo basina yeniden hesaplanmasi
+// gerekirdi.
 async function kur(red, blue) {
   const room = "TAK-" + Math.random().toString(36).slice(2, 6).toUpperCase();
   const tok = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -98,6 +132,28 @@ const kapat = (...s) => { s.forEach((x) => x.close()); return sleep(400); };
 const bos = (h) => h === null || h === "FOREST";
 
 console.log(`Hedef: ${BASE}\n`);
+
+// ─── Kareleri arazinin KENDISINDEN sec ─────────────────────────────────────
+// Bir kesif odasi acilip arazi okunuyor. Sabit koordinat yazsaydik, uretici her
+// degistiginde test sessizce yanlis seyi olcerdi (orn. "acik alan" sandigimiz
+// kare orman cikar ve gizleme kontrolu anlamsizlasirdi).
+let ACIK_SALDIRAN, ACIK_HEDEF, ORMAN_SALDIRAN, ORMAN_HEDEF;
+{
+  const kesifOda = "TAK-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const k1 = await connect(kesifOda, "Kesif1", "k1-" + Date.now(), "kesif");
+  const k2 = await connect(kesifOda, "Kesif2", "k2-" + Date.now(), "kesif");
+  await sleep(800);
+  const arazi = (await waitFor(k2, "room_joined"))?.roomState?.terrain;
+  check(!!arazi, "arazi okundu (kesif odasi)");
+  const ac = acikCift(arazi), or = ormanCift(arazi);
+  ACIK_SALDIRAN = ac.saldiran; ACIK_HEDEF = ac.hedef;
+  ORMAN_SALDIRAN = or.saldiran; ORMAN_HEDEF = or.hedef;
+  console.log(`  acik: ${ACIK_SALDIRAN.row},${ACIK_SALDIRAN.col} -> ${ACIK_HEDEF.row},${ACIK_HEDEF.col}` +
+              `   orman: ${ORMAN_SALDIRAN.row},${ORMAN_SALDIRAN.col} -> ${ORMAN_HEDEF.row},${ORMAN_HEDEF.col}`);
+  check(ormanMu(arazi, ORMAN_HEDEF.row, ORMAN_HEDEF.col), "orman hedefi gercekten orman");
+  check(acikMi(arazi, ACIK_HEDEF.row, ACIK_HEDEF.col), "acik hedef gercekten acik");
+  k1.close(); k2.close(); await sleep(300);
+}
 
 // ─── 1) Rutbe siralamasi: yuksek olan kazanir ──────────────────────────────
 // Ayni zamanda ORMAN testlerinin kontrol grubu: acik alanda kazanan saldiran

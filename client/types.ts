@@ -86,6 +86,13 @@ export interface RoomState {
 
 export type TerrainType = 'LAKE' | 'FOREST' | null;
 
+// Sunucunun her oyun icin urettigi arazi. Istemci bunu SABITTEN degil sunucudan
+// alir; iki oyuncunun ayni tahtayi gormesi buna bagli.
+export interface TerrainData {
+  lakes: { row: number; col: number }[];
+  forests: { row: number; col: number; density: number }[];
+}
+
 export type SquareState = PlacedPiece | 'LAKE' | 'FOREST' | null;
 
 export type BoardState = SquareState[][];
