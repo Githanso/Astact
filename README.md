@@ -861,6 +861,27 @@ kullanılabilir.").
 **Belirtilmemiş olup benim karar verdiğim nokta:** görevin tur harcaması. Bedeli olmasaydı
 istihbarat bedava olurdu. Tek satırlık değişiklikle gevşetilebilir.
 
+### Süre dolunca hiçbir şey söylenmiyordu
+
+Bildirilen belirti: "İzci'yi seçtim, camgöbeği hedefler çıktı, 3 saniye sonra kayboldu ve
+sıra karşı tarafa geçti — hareket edemeden."
+
+Sunucuda hata yok: tur zaman aşımları tam `turnTimeMs` aralıklarıyla işliyor (ölçüldü).
+Olan şuydu — **oyuncunun süresi doldu** ve tur karşıya geçti. Sorun, bunun hiçbir yerde
+söylenmemesiydi:
+
+- Zaman aşımında **hiç bildirim yoktu**. Seçim ve işaretler bir anda kayboluyor, sıra
+  geçiyor, oyuncu sebebini göremiyordu.
+- Geri sayım **"Oyun Bilgisi" panosunda**, ama o pano `PlayerPanel` içinde `isOpen = false`
+  ile başlıyor — yani **varsayılan olarak kapalı**. Oyuncu süresinin azaldığını da görmüyor.
+
+Düzeltme: süresi dolan taraf oyuncunun kendisiyse aynı şerit **"Süren doldu — sıra rakibe
+geçti."** diyor. Hangi tarafın süresinin dolduğu `turn_timeout.nextPhase`'ten çıkarılıyor —
+gelen faz rakibin fazıysa, sırası biten oyuncunun kendisidir.
+
+**Kapalı pano hâlâ öyle:** geri sayımın varsayılan olarak görünür olması ayrı bir karar
+(README'de panoların açılış durumu bilinçli seçilmişti), bu yüzden dokunulmadı.
+
 ### Hamlenin nereye yapıldığı görünmüyordu
 
 Rakip oynadığında tahtada ne değiştiğini fark etmek zordu: sade hamlelerde hiçbir işaret

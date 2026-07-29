@@ -201,7 +201,23 @@ const App: React.FC = () => {
             // Yeniden baglanmada tahta bastan kuruluyor; eldeki secim de bayat.
             case 'game_state_restored': { const mb = createEmptyBoard(terrainRef.current.lakes); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); setSelectedPiece(null); setValidMoves([]); if (typeof msg.remainingMs === 'number') { const kalan = Math.max(0, Math.ceil(msg.remainingMs / 1000)); sunucuKalanRef.current = kalan; setTurnTimeRemaining(kalan); } if (msg.missedTurns) setMissedTurns(msg.missedTurns); setGamePhase(msg.gamePhase || 'PLAY_RED'); if (msg.gamePhase === 'GAME_OVER') { setWinner(msg.winner ?? null); setGameOverReason(msg.reason ?? null); setIsTimeoutDraw(msg.reason === 'TIMEOUT_DRAW'); setGamePhase('GAME_OVER'); } setOnlineErrorMessage(null); break; }
             // Tur suresini sunucu yurutuyor; sira degisimini o bildiriyor.
-            case 'turn_timeout': { setSelectedPiece(null); setValidMoves([]); if (msg.missedTurns) setMissedTurns(msg.missedTurns); if (msg.nextPhase) setGamePhase(msg.nextPhase); break; }
+            // Suresi dolan taraf BEN isem bunu SOYLE. Eskiden sessizdi: secim ve
+            // isaretler bir anda kayboluyor, sira karsiya geciyor, oyuncu sebebini
+            // hicbir yerde goremiyordu. Geri sayim "Oyun Bilgisi" panosunda ama o
+            // pano VARSAYILAN OLARAK KAPALI (PlayerPanel isOpen=false), yani sure
+            // azalirken de bir uyari yok.
+            //
+            // nextPhase rakibin fazi ise sirasi biten benim demektir.
+            case 'turn_timeout': {
+                setSelectedPiece(null); setValidMoves([]);
+                if (msg.missedTurns) setMissedTurns(msg.missedTurns);
+                if (msg.nextPhase) setGamePhase(msg.nextPhase);
+                const benimFazim = myOnlineTeamRef.current === PLAYERS.BLUE ? 'PLAY_BLUE' : 'PLAY_RED';
+                if (msg.nextPhase && msg.nextPhase !== benimFazim) {
+                    setMoveError(prev => ({ metin: TR_KEY('turnTimedOut'), no: (prev?.no ?? 0) + 1 }));
+                }
+                break;
+            }
             // Sunucudan gelen carpisma sonucu, panonun bekledigi CombatResult'a
             // cevriliyor. Burada eskiden YALNIZCA name+rank dolduruluyordu; owner ve
             // special bos kaldigi icin pano her iki tasi da "2. Oyuncu" diye
