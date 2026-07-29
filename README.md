@@ -861,6 +861,32 @@ kullanılabilir.").
 **Belirtilmemiş olup benim karar verdiğim nokta:** görevin tur harcaması. Bedeli olmasaydı
 istihbarat bedava olurdu. Tek satırlık değişiklikle gevşetilebilir.
 
+#### Açık kalan: "İzci çalışmıyor" görüntüsü — bilinçli olarak dokunulmadı
+
+Bildirilen belirti: "İzci'nin özelliği çalışmıyor." Tarayıcıda iki senaryo üretildi, kural
+tarafında hata **yok**:
+
+- Görev işliyor: İzci seçilince camgöbeği hedefler çıkıyor, tıklanınca rakip taşı açılıyor
+  (üretilen oyunda a3'teki taş "7 Binbaşı" olarak açıldı), tur karşıya geçiyor. Aynı satırdaki
+  dört düşman taşından ikisi hedef olarak **görünmedi** — ikisi de orman karesindeydi, yani
+  orman kuralı doğru işliyor.
+- Ama aynı İzci ikinci kez seçilince **hiçbir şey olmuyor**: hedef yok, mesaj yok. Sebep bekleme
+  süresi. İkinci İzci (hiç kullanılmamış) seçilince de hiçbir şey olmuyor — bu kez sebep, o
+  satırdaki gölün görüşü kapatması.
+
+Yani **iki farklı sebep ekranda birebir aynı sonucu veriyor: sessizlik.** Kaynağı `App.tsx:536-538`;
+`scoutIn > 0` iken hedefler "oyuncu boşuna tıklayıp hata almasın" diye gizleniyor. Niyet iyi ama
+sonuç ters — yetenek bozuk görünüyor.
+
+Yan etkisi: `errSCOUT_COOLDOWN` / `errSCOUT_LAKE` / `errSCOUT_FOREST` / `errSCOUT_RANGE` metinleri
+dört dilde yazılı ama **normal oyunda hiçbiri ekrana çıkamıyor** — istemci engelli hedefi zaten
+tıklattırmıyor, sunucu da reddetme fırsatı bulamıyor. `test/izci-testi.mjs` bu kodları protokol
+düzeyinde tetikleyerek geçiyor, o yüzden test yeşil olsa da oyuncu metinleri hiç görmüyor.
+
+Düzeltme seçenekleri (biri seçilirse): hedef yokken şeritte sebebi yazmak (yazılı metinler
+nihayet kullanılır), İzci taşının köşesine kalan tur rozeti koymak, ya da `SCOUT_COOLDOWN`'u
+düşürmek. **Karar: şimdilik dokunulmadı**, davranış olduğu gibi bırakıldı.
+
 ### Süre dolunca hiçbir şey söylenmiyordu
 
 Bildirilen belirti: "İzci'yi seçtim, camgöbeği hedefler çıktı, 3 saniye sonra kayboldu ve
@@ -1017,9 +1043,65 @@ Prosedürel müzik kaldırıldı, yerine `new Audio('/game_music.mp3')` ile dön
 yakalanıyor (autoplay engeli sessiz hata vermesin diye). Ses varsayılan olarak **kapalı**
 başlıyor; kullanıcı ses çubuğunu açınca çalmaya başlıyor.
 
-**Kalan eksik:** `playSelect`, `playMove`, `playCombat`, `playExplosion`, `playVictory`
-metotlarının tamamı **boş gövde** (`{}`) — yani ses efektlerinin hiçbiri çalışmıyor.
-Uygulamaları v5 kaynağında hiç yok, yeniden yazılmaları gerekir.
+### Ses efektleri: önce altyapı, sonra dosyalar
+
+Beş efekt metodu (`playSelect`, `playMove`, `playCombat`, `playExplosion`, `playVictory`) v5
+kaynağından **boş gövdeyle** (`{}`) gelmişti; uygulamaları hiç yoktu. Yani müzik dışında oyunda
+hiçbir ses yoktu.
+
+Ses dosyaları elle üretiliyor (üretim promptları `ses-promptlari.md`'de: her efektin hangi kod
+satırında çaldığı, süresi, sıklığı ve 500 karakteri aşmayan İngilizce prompt'u). İlk gelen dosya
+`public/sfx-move.mp3` oldu, bağlanan tek efekt şimdilik `playMove`.
+
+Altyapı `soundFX.ts` içinde, müzik tarafına dokunmadan kuruldu:
+
+- Efekt **ilk kullanımda** çekiliyor (`fetch` → `decodeAudioData` → `AudioBuffer`), sonra
+  `fxBuffers`'ta duruyor. Önden yükleme yok: açılışta `game_music.mp3` zaten 3.6 MB.
+- Aynı efekt yüklenirken ikinci kez çağrılırsa `fxLoading` ikinci `fetch`'i engelliyor.
+- Çalma zinciri `BufferSource → efekt kazancı → masterGain`. `masterGain` o güne kadar hiç
+  kullanılmıyordu; bu bağlantı sayesinde **ses kaydıracı ve sustur düğmesi efektleri de kısıyor.**
+  Her çalmada yeni `BufferSource` kuruluyor, böylece üst üste binen sesler birbirini kesmiyor —
+  tek bir `HTMLAudioElement` ile bu mümkün olmazdı.
+- Dosya yoksa veya çözülemezse **sessiz düşülüyor**: `fxBuffers`'a `null` yazılıyor, bir daha
+  denenmiyor. Bağlanmamış dört metot boş gövdede duruyor, dosyaları geldiğinde gövde tek satır.
+- `volume === 0` iken hiç çalınmıyor (fetch bile edilmiyor).
+
+Doğrulandı (`wrangler dev`, iki istemci ayrı origin'de): ilk `playMove()` çağrısında
+`GET /sfx-move.mp3 → 200` düşüyor, sonraki hamlelerde **yeni istek yok** (önbellek çalışıyor),
+konsolda ses kaynaklı hata yok. Hem gerçek hamle (`move_executed`) hem dizilimdeki "Temizle"
+düğmesi (`handleClearSetup`) aynı yoldan geçiyor.
+
+**Açık kalan:** ses kaydıracının etiketi hâlâ "Arka Plan Müzik Sesi" — artık efektleri de
+kısıyor, yani etiket dar kalıyor (dört dilde çeviri anahtarı değişmesi gerekir).
+
+### Müzik artık menü müziği: odaya girince susuyor
+
+Müzik açılışta başlıyor ve oyun boyunca çalmaya devam ediyordu. Artık **yalnızca menüde** çalıyor:
+odaya girildiği anda susuyor, odadan çıkılınca kaldığı yerden geri geliyor.
+
+Ölçüt `isOnlineMode` değil **`screen`**: oda kurmak da (`room_created`) katılmak da (`room_joined`)
+ekranı `GAME` yapıyor, `handleLeaveOnlineRoom` ise `MENU`'ye döndürüyor — yani tek koşul her yolu
+kapsıyor. `App.tsx`'te tek satırlık efekt: `soundManager.setMusicAllowed(screen === 'MENU')`.
+
+Asıl iş `soundFX.ts`'teki **`musicAllowed`** bayrağında. Müziği durdurmak tek başına yetmiyordu,
+çünkü iki yol onu oyunun ortasında geri başlatırdı:
+
+- `setVolume` içindeki "ses açıldıysa müziği başlat" dalı — oyun içi kaydıraca dokunmak müziği
+  geri getirirdi.
+- `visibilitychange` dinleyicisi — o dinleyici uygulama ömrü boyunca duruyor ve sekmeye her
+  dönüşte `unmuteBackgroundMusic()` çağırıyor.
+
+Bu yüzden bayrak `startBackgroundMusic()` ve `unmuteBackgroundMusic()`'in **başında** kontrol
+ediliyor; ikisi de kapalıyken hiç iş yapmadan dönüyor. Açılıştaki üç aşamalı autoplay akışına
+dokunulmadı: ilk render'da `screen` zaten `MENU` ve `setMusicAllowed` aynı değeri alınca hiçbir
+şey yapmıyor.
+
+Tarayıcıda `HTMLMediaElement.prototype.play/pause` sarmalanarak doğrulandı (yığın izi dahil):
+
+- oda kurulunca **tek** `pause` → `setMusicAllowed → stopBackgroundMusic`
+- odadayken ses kaydıracı iki kez oynatıldı → **hiç** `play` yok, müzik kapalı kaldı
+- odadan çıkınca **tek** `play` → `setMusicAllowed → unmuteBackgroundMusic → startBackgroundMusic`,
+  ses o anki seviyede (%15) geri geldi
 
 ### Prop uyuşmazlıkları — hepsi kapatıldı
 

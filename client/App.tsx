@@ -411,6 +411,15 @@ const App: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Muzik menu muzigi: odaya girildigi anda susuyor, menuye donunce geri geliyor.
+    // Olcut EKRAN, "online mod" degil — oda kurulunca da katilinca da screen 'GAME'
+    // oluyor, ayrilinca 'MENU'ye donuyor, yani tek kosul her yolu kapsiyor.
+    // Ilk render'da screen zaten 'MENU' oldugu icin bu efekt acilistaki uc asamali
+    // autoplay akisina dokunmuyor (setMusicAllowed ayni degeri alinca is yapmiyor).
+    useEffect(() => {
+        soundManager.setMusicAllowed(screen === 'MENU');
+    }, [screen]);
+
 
     const currentPlayer = useMemo(() => { if (gamePhase === 'SETUP_RED' || gamePhase === 'PLAY_RED') return PLAYERS.RED; if (gamePhase === 'SETUP_BLUE' || gamePhase === 'PLAY_BLUE') return PLAYERS.BLUE; return null; }, [gamePhase]);
 

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="mavi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e40af" />
+      <stop offset="100%" stop-color="#172554" />
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="96" height="96" rx="10" fill="url(#mavi)" stroke="#38bdf8" stroke-opacity="0.8" stroke-width="4" />
+  <text x="50" y="52" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="34" font-weight="900" fill="#e0f2fe">10</text>
+  <text x="50" y="72" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#e0f2fe" opacity="0.9">MAREŞAL</text>
+</svg>
