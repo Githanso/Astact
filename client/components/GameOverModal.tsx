@@ -12,15 +12,23 @@ interface GameOverModalProps {
     myTeam?: Player | null;
     reason?: GameOverReason;
     onRestart: () => void;
-    gamePhase?: GamePhase;
+    // ZORUNLU: gorunurlugun olcutu bu. Istege bagli birakilirsa gecilmedigi
+    // durumda modal sessizce hic gorunmez olurdu.
+    gamePhase: GamePhase;
     lang?: Language;
-    onClose?: () => void;
 }
 
-const GameOverModal: React.FC<GameOverModalProps> = ({ winner, isTimeoutDraw = false, notice = null, myTeam = null, reason = null, onRestart, lang = 'TR' }) => {
+const GameOverModal: React.FC<GameOverModalProps> = ({ winner, isTimeoutDraw = false, notice = null, myTeam = null, reason = null, onRestart, gamePhase, lang = 'TR' }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
-    // Beraberlikte kazanan YOK; eskiden burada koşulsuz null dönülüyordu, o yüzden
-    // beraberlik ekrana hiç düşmezdi.
+    // Görünürlüğün TEK ölçütü FAZ. Eskiden yalnızca winner/isTimeoutDraw'a bakılıyordu
+    // ve bu, ekranı kilitleyen bir duruma yol açıyordu: fazı GAME_OVER'dan çeken bazı
+    // dallar (room_started_setup gibi) bu iki değeri temizlemiyordu, sonuç ekranı da
+    // dizilimin üstünde asılı kalıyordu. Oyuncu için "Yeniden Başlat çalışmıyor" gibi
+    // görünüyordu — oysa oyun çoktan yeniden başlamıştı, sadece kapak kalkmıyordu.
+    // Artık bayat değer ekranı kilitleyemez: faz oyun sonundan çıkınca kapak da kalkar.
+    if (gamePhase !== 'GAME_OVER') return null;
+    // Beraberlikte kazanan YOK; burada koşulsuz null dönülürse beraberlik ekrana
+    // hiç düşmez.
     if (!winner && !isTimeoutDraw) return null;
 
     const winnerColor = winner === PLAYERS.RED ? 'text-amber-400' : 'text-sky-300';

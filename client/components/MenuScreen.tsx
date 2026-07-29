@@ -2,16 +2,19 @@ import React from 'react';
 import { Language } from '../types';
 import { LANGUAGES, TRANSLATIONS } from '../constants';
 import { Users, Settings } from 'lucide-react';
+import { MuteToggle } from './SettingsControls';
 
-// Giris (menu) ekrani: logo, online oyun, ayarlar, dil.
+// Giris (menu) ekrani: logo, online oyun, ayarlar, ses, dil.
 interface MenuScreenProps {
     lang: Language;
     onLanguageChange: (lang: Language) => void;
     onOpenOnline: () => void;
     onOpenSettings: () => void;
+    volume: number;
+    onVolumeChange: (volume: number) => void;
 }
 
-const MenuScreen: React.FC<MenuScreenProps> = ({ lang, onLanguageChange, onOpenOnline, onOpenSettings }) => {
+const MenuScreen: React.FC<MenuScreenProps> = ({ lang, onLanguageChange, onOpenOnline, onOpenSettings, volume, onVolumeChange }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
 
     return (
@@ -57,28 +60,45 @@ const MenuScreen: React.FC<MenuScreenProps> = ({ lang, onLanguageChange, onOpenO
                         <span>{t.onlineButton}</span>
                     </button>
 
-                    <button
-                        onClick={onOpenSettings}
-                        className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-slate-200 font-black text-sm uppercase tracking-wider shadow-lg transition-all active:scale-95"
-                    >
-                        <Settings className="w-4 h-4" />
-                        <span>{t.settingsPanelTitle}</span>
-                    </button>
+                    {/* Ses dugmesi AYARLAR'in yaninda, penceresinin icinde degil: muzik
+                        YALNIZCA bu ekranda caliyor (odaya girilince susuyor), yani susturma
+                        ihtiyaci tam burada dogar. Iki tiklama otede olmasi anlamsizdi. */}
+                    <div className="flex items-stretch gap-3">
+                        <button
+                            onClick={onOpenSettings}
+                            className="flex-1 flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-slate-200 font-black text-sm uppercase tracking-wider shadow-lg transition-all active:scale-95"
+                        >
+                            <Settings className="w-4 h-4" />
+                            <span>{t.settingsPanelTitle}</span>
+                        </button>
+                        <MuteToggle
+                            volume={volume}
+                            onVolumeChange={onVolumeChange}
+                            lang={lang}
+                            className="w-20 flex-shrink-0 rounded-xl"
+                            iconClassName="w-5 h-5"
+                        />
+                    </div>
                 </div>
 
-                <div className="mt-9 flex items-center gap-1.5">
-                    {LANGUAGES.map(l => (
+                {/* Etiket olarak BAYRAK EMOJISI degil dilin kendi adi kullaniliyor:
+                    Windows'ta bayrak emojileri renkli bayrak olarak cizilmiyor, iki
+                    harflik kutuya dusuyor — ekranda "TR TR", "GB EN" gibi cikiyordu,
+                    yani bayrak diye eklenen sey kodun tekrari gibi gorunuyordu.
+                    Kendi dilini arayan kullanici da "KO" yerine "한국어"yi taniyor. */}
+                <div className="mt-9 flex flex-wrap items-center justify-center gap-1.5">
+                    {LANGUAGES.map(dil => (
                         <button
-                            key={l.code}
-                            onClick={() => onLanguageChange(l.code as Language)}
-                            aria-pressed={lang === l.code}
+                            key={dil.code}
+                            onClick={() => onLanguageChange(dil.code as Language)}
+                            aria-pressed={lang === dil.code}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                                lang === l.code
+                                lang === dil.code
                                     ? 'bg-slate-800 border-amber-500/50 text-amber-300'
                                     : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
                             }`}
                         >
-                            {l.flag} {l.code}
+                            {dil.name}
                         </button>
                     ))}
                 </div>

@@ -133,7 +133,7 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
                       {roomState?.redPlayer || t.playerRed}
                       {playerTeam === '1. Oyuncu' && <span className="ml-1.5 text-[10px] text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/40">{t.youBadge}</span>}
                     </div>
-                    <div className="text-[10px] text-slate-400">1. Birlik (Ev Sahibi)</div>
+                    <div className="text-[10px] text-slate-400">{t.teamRedUnit}</div>
                   </div>
                 </div>
                 {roomState?.redConnected ? (
@@ -158,7 +158,7 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
                       {roomState?.bluePlayer || (roomState?.bluePresent ? t.playerBlue : t.statusWaiting)}
                       {playerTeam === '2. Oyuncu' && <span className="ml-1.5 text-[10px] text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/40">{t.youBadge}</span>}
                     </div>
-                    <div className="text-[10px] text-slate-400">2. Birlik (Misafir)</div>
+                    <div className="text-[10px] text-slate-400">{t.teamBlueUnit}</div>
                   </div>
                 </div>
                 {roomState?.bluePresent ? (

@@ -2,23 +2,23 @@ import React from 'react';
 import { Language, TimerPreset } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { Settings, X } from 'lucide-react';
-import { TimerPresetPicker, VolumeControl } from './SettingsControls';
+import { TimerPresetPicker } from './SettingsControls';
+import { RulesSection } from './RulesSection';
 
 // Menudeki Ayarlar penceresi. Icerik bilincli olarak OYUN ONCESI anlamli olan seylerle
 // sinirli: sure on ayari (oyun baslayinca zaten kilitleniyor, yani dogru yeri burasi) ve
-// ses. Dil menude bayrak dugmeleri olarak duruyor, burada tekrarlanmiyor.
+// kurallar (oyuna baslamadan once okunur). Dil ve ses menu ekraninda dugme olarak
+// duruyor, burada tekrarlanmiyor.
 interface MenuSettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     timerPreset: TimerPreset;
     onPresetChange: (preset: TimerPreset) => void;
-    volume: number;
-    onVolumeChange: (volume: number) => void;
     lang: Language;
 }
 
 const MenuSettingsModal: React.FC<MenuSettingsModalProps> = ({
-    isOpen, onClose, timerPreset, onPresetChange, volume, onVolumeChange, lang,
+    isOpen, onClose, timerPreset, onPresetChange, lang,
 }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
     if (!isOpen) return null;
@@ -43,7 +43,7 @@ const MenuSettingsModal: React.FC<MenuSettingsModalProps> = ({
                     {/* Oyun menuden baslamadigi icin burada kilit yok. Online'da secim
                         yalnizca ODA KURUCUSU icin gecerli — not bunu soyluyor. */}
                     <TimerPresetPicker timerPreset={timerPreset} onPresetChange={onPresetChange} isLocked={false} showHostNote lang={lang} />
-                    <VolumeControl volume={volume} onVolumeChange={onVolumeChange} lang={lang} />
+                    <RulesSection lang={lang} />
                 </div>
 
                 <button

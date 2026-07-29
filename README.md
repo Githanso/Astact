@@ -394,6 +394,263 @@ varsayılan kapalı başlatmak yeterli.
 Önce koyulursa `tsc` "Block-scoped variable used before its declaration" verir ve çalışma
 zamanında `ReferenceError` olur — `vite build` bunu yakalamaz.
 
+### Oyun ekranı üst şeridi yeniden kuruldu (`GameHeader.tsx`)
+
+Görsel revizyon turunun üçüncü ekranı, ilk adım (`gorsel-revize/tahta-paneli.jpg`).
+Başlık `App.tsx` içinden çıkarılıp kendi bileşenine alındı ve iki satır oldu:
+
+| | Sol | Orta | Sağ |
+|---|---|---|---|
+| 1. satır | marka (logo + slogan) | — | **rakibin** durumu · adı · oda kodu |
+| 2. satır | **kendi rozetin** | durum cümlesi | Yeniden Başlat · Odayı Terk Et |
+
+**Marka sola alındı.** Eskiden sağdaydı ve pano sütununa hizalanmak için görünmez bir
+boşluk (`tahtaGenislikSiniri` genişliğinde `aria-hidden` div) kullanıyordu — panolar
+kalktığı için o numaraya gerek kalmadı, düz `justify-between` yetiyor.
+
+**İki taraf da tam olarak bir kez basılıyor.** Rozet "ben kimim, bağlı mıyım" (ad + birlik +
+`(Siz)` etiketi + kendi bağlantı durumum), sağ üst künye "rakip kim, bağlı mı" (durum noktası
++ adı + oda kodu). Bölünme böyle seçildi çünkü aynı bilgiyi iki yerde göstermek yer harcamak
+dışında bir şey kazandırmıyordu — eski başlıkta kendi takımın hem künyede hem panoda vardı,
+rakibin bağlantısı ise hiçbir yerde sürekli görünmüyordu.
+
+Rakip henüz katılmadıysa sağ üstte gri nokta + "Oyuncu Bekleniyor…" çıkıyor; adını
+yazmadan katılan biri için "Bekleniyor" değil takım etiketi basılıyor (adsız katılmak
+bekleniyor olmak değil).
+
+**Durum cümlesi tek kaynaktan.** Faz/online durum → metin+renk eşlemesi `PlayerPanel`
+içinde gömülüydü; `lib/durumMetni.ts`'e çıkarıldı ve hem header şeridi hem pano oradan
+okuyor. İki kopya bırakılsaydı biri diğerinden saparadı.
+
+**Çeviri sızıntısı kapatıldı:** `1. Birlik (Ev Sahibi)` ve `2. Birlik (Misafir)` metinleri
+`OnlineModal.tsx`'te **sabit Türkçe** yazılıydı ve dört dilde de Türkçe çıkıyordu.
+Denetimin gözünden kaçmışlardı çünkü ne Türkçe özel karakter içeriyorlar ne de
+`TR_KELIME` listesindeki bir kelimeyi. `teamRedUnit`/`teamBlueUnit` anahtarlarına taşındı
+(158 → 160).
+
+Doğrulandı (iki istemci, ayrı origin): kurucuda rozet "1. Oyuncu (Siz) / 1. Birlik
+(Ev Sahibi)" ve sağ üstte "Rakip: 2. Oyuncu"; katılanda tam tersi. Orta şerit "Rakip
+bekleniyor" → "Rakip taşlarını diziyor" diye ilerliyor.
+
+#### Sağdaki Ayarlar panosu kaldırıldı
+
+`SettingsPanel` içindeki üç şeyin de yeri değişti, geriye kaldıracak bir şey kalmadı:
+
+| İçerik | Nereye gitti |
+|---|---|
+| Yeniden Başlat | Header'ın 2. satırı |
+| Oda kodu düğmesi (OnlineModal'ı açardı) | Oda kodu header künyesinde; modalın kendisi in-game'de artık **kendiliğinden** açılıyor |
+| Ses kaydıracı | Menü ekranındaki sustur düğmesi (müzik odaya girilince zaten susuyor) |
+
+Oda modalına elle giriş kalmadı ama **bir şey kaybolmuyor**: `room_error` dalı modalı
+kendisi açıyor (`App.tsx:197`), yani oda seviyesindeki hatalar görünmez kalmıyor. Modalın
+diğer içeriği (oyuncu durumları, Odayı Terk Et) zaten header'a taşındı.
+
+Sağ sütunda yalnızca Oyun Bilgisi panosu kaldı — o da sonraki adımda sağdan açılır
+çekmeceye dönüşecek.
+
+#### Oyun Bilgisi panosu sadeleşti
+
+Panodan iki blok kaldırıldı; ikisi de başka yerde daha iyi hâliyle duruyor:
+
+- **Durum cümlesi** ("Rakip hazır — seni bekliyor" vb.) → header'ın orta şeridinde
+  sürekli görünüyor. Pano varsayılan **kapalı** başladığı için buradaki kopya çoğu zaman
+  hiç okunmuyordu bile.
+- **"Rütbe Hiyerarşisi & Özel Kurallar" açılırı** → menüdeki Ayarlar penceresinde, daha
+  eksiksiz hâliyle (`RulesSection`: adetler, özel taşlar, dokuz kural maddesi). Oyun
+  ortasında ikinci bir kopya tutmak hem yer harcıyor hem ikisinin ayrışma riskini doğuruyordu.
+
+- **Geri sayım** → header'ın orta şeridine, durum cümlesiyle **aynı kutuya**.
+
+Pano artık tam olarak mockup'taki içeriği taşıyor: galibiyet sayacı, ele geçirilenler,
+çarpışma geçmişi.
+
+#### Süre, durum şeridinin içinde
+
+Mockup'ta süre için ayrı bir kutu vardı (üstte ortada); **kurulmadı.** Süre ve "sıra kimde"
+aynı soruya cevap veriyor ("şimdi ne oluyor"), ayrı kutulara bölününce göz iki yere gidiyordu.
+Tek şeritte birleştiler:
+
+```
+Sıra sende  🕐 33sn        (yeşil — senin turun)
+Sıra rakipte  🕐 20sn      (gri  — rakibin turu)
+```
+
+Kutunun rengi zaten `oyunDurumu`'ndan geliyor, yani **sürenin kimin süresi olduğu renkten
+belli oluyor** — ayrıca yazmaya gerek kalmadı. Süre yalnızca `PLAY` fazında basılıyor;
+dizilimde şeritte sadece durum cümlesi var.
+
+Bu, panonun kapalı başlaması yüzünden doğan eski sorunu da kapatıyor: tur saati artık her
+zaman görünür. (Bkz. "Süre dolunca hiçbir şey söylenmiyordu" — orada geri sayımın kapalı
+panoda saklı kalması açık madde olarak bırakılmıştı.)
+
+#### Taşa tıklayınca o türden kaç tane kaldığı
+
+Tahtada bir taşa tıklanınca tahtanın üstünde küçük bir şerit beliriyor, seçim kalkınca
+kayboluyor:
+
+```
+İzci · Sende 2/2 · Rakip kaybı 0/2
+```
+
+**Yalnızca tıklanan tür gösteriliyor**, tüm liste değil: 14 satırlık tablo her seçimde ekranı
+kaplardı ve oyuncunun o an sorduğu soru tek bir şey — "elimde bundan kaç tane kaldı". Tam
+liste zaten menüdeki kurallar bölümünde.
+
+**Taşın üzerindeki rütbe olduğu gibi kaldı.** Sayıyı rütbenin yerine koymak gündeme geldi
+ama rütbe çarpışmayı belirleyen tek bilgi; görünmezse oyuncu kendi taşının gücünü bilemez.
+
+Sayım `lib/tasSayimi.ts`'te, iki ayrı kaynaktan:
+
+- **Kendi kalanım** → tahtadan sayılıyor (kendi taşlarımın adı her zaman görünür).
+- **Rakip kaybı** → çarpışma geçmişinden. Bu **güvenli**: ölen taş her zaman açığa çıkıyor,
+  orman kuralı yalnızca *kazananı* gizliyor (`server.ts:603-604`). Yani sızdırma yok, adı
+  bilinmeyen kayıt (`'???'`) zaten atlanıyor.
+
+Mantık kalıcı bir birim testine bağlandı: **`npm run test:sayim`**
+(`test/tas-sayimi-testi.mjs`, 12 kontrol). Sınama yazılırken bir hata yakalandı —
+**kodun değil, beklentinin** hatası: `DEFENDER_WINS`'te ölen **saldıran** taraf,
+dolayısıyla o kayıt savunanın rakip kaybı değil kendi kaybı. Kod baştan doğruydu.
+
+Bu, depodaki **ilk birim testi** — diğerleri sunucuya WebSocket ile bağlanan uçtan uca
+testler. `.ts` dosyası doğrudan import ediliyor, ayrı derleme adımı yok: Node 22.18+
+tipleri kendisi ayıklıyor. Bunun çalışması için `tasSayimi.ts` **`import type`**
+kullanıyor — değeri olan tek bir import bile olsa `types.ts` çalışma anında yüklenmek
+zorunda kalır, oradaki `enum` da ayıklanamadığı için test patlardı.
+
+Sayaçlar oyuncuya sayı söylüyor ve oyuncu ona göre karar veriyor; yanlış sayı, sayı
+olmamasından kötüdür — testin gerekçesi bu.
+
+#### "Ele Geçirilenler" online oyunda hep 0/40 gösteriyordu
+
+Sayaç `redCaptured`/`blueCaptured` dizilerinden okunuyordu; o diziler **yalnızca yerel
+çarpışma dalında** dolduruluyor (`App.tsx:653-654`), online `move_executed` onlara hiç
+dokunmuyor — sadece sıfırlıyor. Yerel mod menüden kalkınca sayaç fiilen hiç çalışmaz oldu.
+
+Artık tahtadan türetiliyor: `TOPLAM_TAS - tahtadaki taş sayısı`. Rakip tarafı da doğru
+çıkıyor çünkü gizli taşlar da tahtada `owner` bilgisiyle duruyor — yalnızca ad/rütbe
+gizleniyor, kare boş görünmüyor. Dizilim sırasında hesaplanmıyor: taşlar henüz konmadığı
+için "eksik olan taş" kayıp gibi görünürdü.
+
+`TOPLAM_TAS` de `PIECE_COUNTS`'tan türetildi; panodaki sabit `/ 40` yazıları onunla
+değiştirildi.
+
+#### "Berabere sonrası Yeniden Başlat çalışmıyor"
+
+Bildirilen belirti doğruydu ama sebebi düğme değildi. Üretilen durumda ekranda **iki modal
+aynı `z-index: 1000`'de üst üste** duruyordu:
+
+- `GameOverModal` → "BERABERE … YENİDEN BAŞLAT"
+- `RestartNoticeModal` → "Rakip yeniden başlatma istedi … YENİDEN BAŞLAT"
+
+Metinler iç içe geçiyor, iki ayrı "YENİDEN BAŞLAT" düğmesi birkaç piksel kayık çakışıyordu.
+Tıklayınca hangisine bastığı belli değildi. (Ölçüldü: düğme aslında çalışıyordu — tıklayınca
+ikisi de kapandı.)
+
+**Asıl kusur bir kat aşağıdaydı:** `GameOverModal` görünürlüğünü yalnızca
+`winner || isTimeoutDraw` değerlerinden alıyordu, `gamePhase`'e hiç bakmıyordu. Fazı
+`GAME_OVER`'dan çeken bazı dallar bu iki değeri **temizlemiyordu**:
+
+| Dal | Fazı değiştiriyor | Oyun sonu durumunu temizliyor mu |
+|---|---|---|
+| `game_restarted` | SETUP | evet |
+| `room_started_setup` | SETUP | **hayır** |
+| `both_setup_complete` | PLAY | **hayır** |
+
+Yani faz SETUP'a geçmiş, oyun yeniden başlamış olmasına rağmen sonuç ekranı üstte asılı
+kalabiliyordu — oyuncuya "düğme çalışmıyor" gibi görünen şey buydu; oyun çoktan yeniden
+başlamıştı, sadece kapak kalkmıyordu.
+
+Düzeltme iki katmanlı:
+
+1. **`GameOverModal` artık `gamePhase !== 'GAME_OVER'` iken hiç render edilmiyor.** Faz tek
+   ölçüt; bayat bir `winner`/`isTimeoutDraw` değeri ekranı bir daha kilitleyemez. Prop da
+   `gamePhase?` yerine **zorunlu** yapıldı — isteğe bağlı kalsaydı geçilmediği durumda modal
+   sessizce hiç görünmezdi.
+2. Yukarıdaki iki dal oyun sonu durumunu (`winner`, `gameOverReason`, `isTimeoutDraw`,
+   `restartNotice`) **temizliyor**.
+
+Doğrulandı (iki istemci): oyun sırasında Yeniden Başlat → isteyende "rakibin onayı
+bekleniyor", karşıda "rakip yeniden başlatma istedi" — **tek modal**, üst üste binme yok.
+Karşı taraf onaylayınca iki istemcide de modal kalkıyor, dizilim ekranı geliyor.
+
+#### Oyun Bilgisi panosunda yalnızca çarpışma geçmişi kaldı
+
+Galibiyet sayacı ve "Ele Geçirilenler" kutusu da kaldırıldı. Hangi taştan kaç kaldığı zaten
+taşa tıklayınca tahtanın üstünde tür bazında çıkıyor; galibiyet sayacına gerek görülmedi.
+
+Bunun ardından boşa düşen `tahtadakiTasSayisi` yardımcısı, `kayipSayaci` hesabı ve
+`PlayerPanel`'in dört prop'u (`panelPlayer`, `stats`, `redCapturedCount`,
+`blueCapturedCount`) da kaldırıldı. Bir önceki turda düzeltilen "online'da hep 0/40" hatası
+böylece konusuz kaldı — kutu artık yok.
+
+#### Çarpışma geçmişi çekmeceye dönüştü, tahta büyüdü
+
+Görsel revizyonun son ekranı (`gorsel-revize/tahta-acilir-panel.jpg`). Pano artık sabit
+genişlikte bir **sütun** değil, pencerenin sağ kenarına yapışan ve tahtanın üstüne binen bir
+**çekmece**. Başlığı da içeriğine göre değişti: "Oyun Bilgisi" → **"Çarpışma Geçmişi"**.
+
+Kazanç doğrudan tahtaya gitti: sütun 288px yer ayırıyordu ve tahta o genişliği hep
+kaybediyordu. Çekmece yer ayırmadığı için tahta boşalan alanı alıyor.
+
+**Kapalıyken** sağ kenarda ince bir tutamak duruyor (`‹` + ⓘ + varsa çarpışma sayısı).
+Varsayılan kapalı: açıkken tahtanın üstüne bindiği için, açılışta oyuncuyu "önce şunu kapat"
+durumuna sokmak istemedik.
+
+Ok yönü mockup'tan bilinçli olarak ayrıldı: mockup'ta açık panelde `‹` vardı, burada `›`
+kullanılıyor. Ölçüt şu — **okun gösterdiği yer, düğmeye basınca panelin gideceği yer.**
+Çekmece sağdan açıldığı için kapatma oku sağı, açma oku solu gösteriyor.
+
+Konumlandırma `fixed`, `main`'e göre `absolute` değil: `main` `max-w-7xl` ile sınırlı ve
+ortalanmış, yani geniş ekranda sağda 300px+ boşluk kalıyor — çekmece oraya değil pencere
+kenarına yapışmalı. Dikey konumu `--baslik-h`'ten geliyor.
+
+#### Tahta genişliği sabiti artık ölçülüyor
+
+`tahtaGenislikSiniri` iki elle yazılmış sabite dayanıyordu (online 172px / yerel 136px =
+başlık + dolgu). Başlık her değiştiğinde bu sabit bayatladı ve **iki kez** tahtanın alt
+kenarı pencereyi aştı (5px'lik kaydırma, bu README'de iki ayrı yerde açık madde olarak
+duruyordu).
+
+Sabit kaldırıldı. Başlık yüksekliği bir `ResizeObserver` ile ölçülüp `--baslik-h` CSS
+değişkenine yazılıyor; formül onu okuyor:
+
+```
+lg:max-w-[min(1100px,calc((100vh-var(--baslik-h,129px)-64px)*1.1+32px))]
+```
+
+`64px` = main dolgusu (16+16) + koordinat şeritleri (16+16); `1.1` = 11/10 en-boy oranı.
+`ResizeObserver` şart: başlık sabit yükseklikte değil — dil değişince metinler sarabiliyor,
+pencere daralınca künye alt satıra iniyor.
+
+Ölçülerek doğrulandı (1912×857 pencere): `--baslik-h` = **129px**, çekmecenin sağ kenarı
+**1912** (pencere genişliğiyle aynı), üst kenarı **145** (= 129 + 16), tahtanın alt kenarı
+**841 < 857** ve **sayfa taşması 0** — üst üste iki turdur açık duran 5px'lik kaydırma
+kapandı.
+
+#### Boşa düşen kod temizlendi
+
+| Ne | Neden boşa düştü |
+|---|---|
+| `components/SettingsPanel.tsx` (silindi) | İçindeki üç şeyin de yeri değişti |
+| `VolumeControl` (`SettingsControls.tsx`'ten silindi) | Tek müşterisi o panoydu; ses artık menüdeki `MuteToggle` ile yönetiliyor |
+| 7 çeviri anahtarı × 4 dil (28 satır) | `piecePowers`, `specialRules`, `spyRule`, `minerRule`, `bombRule`, `sameRankRule`, `noBackwardRule` — tek tüketicileri panodaki rütbe açılırıydı; yerlerini `rulesTitle` / `rule*` aldı |
+| `PlayerPanel`'in dört prop'u | `currentPlayer`, `gamePhase`, `turnTimeRemaining`, `onlineStatus` — durum ve süre header'a taşındıktan sonra hiçbiri okunmuyordu |
+
+Anahtar silme işi elle değil betikle yapıldı: her anahtarın **tam dört** eşleşmesi olduğu
+doğrulanmadan hiçbir şey yazılmadı (bir dilde fazladan/eksik eşleşme olsaydı iş yarıda
+kesilecekti). Sonuç 161 → 154, dört dilde eşit.
+
+Not: `test:i18n` kullanılmayan anahtarı **görmez** — yalnızca dört dilin aynı anahtar
+kümesine sahip olmasına bakar. Bu yüzden ölü çeviriler kendiliğinden ortaya çıkmıyor,
+tüketicisi silinen anahtarı elle takip etmek gerekiyor.
+
+**Açık kalan (tahta turuna):** `tahtaGenislikSiniri` formülündeki `172px` sabiti artık
+gerçeği yansıtmıyor — yeni başlık **129px**. Ölçüldü: tahtanın alt kenarı pencereyi 5px
+aşıyor, sayfada ~21px kaydırma doğuyor. Sabit şimdi düzeltilmedi çünkü tahta alanının
+tamamı bir sonraki adımda yeniden kurgulanıyor (pano çekmeceye dönüyor, tahta büyüyor);
+şimdi ayarlamak çöpe gidecek bir ölçü olurdu.
+
 ### Yan panolar ikiye ayrıldı, ikisi de sağda
 
 Eski tek `GameInfo.tsx` her şeyi taşıyordu. Artık iki ayrı pano var ve **ikisi de tahtanın
@@ -531,6 +788,88 @@ kutu duruyor ama tetiklenmiyor. Kuralın işler hâle gelmesi için tur saatinin
 
 Kaldırılanlar: `handleStartLocal`, `localGameButton` çevirisi (4 dil), `App.tsx`'teki
 kullanılmayan `Swords` importu.
+
+### Ses düğmesi menüye çıktı, dil seçicideki bayraklar kalktı
+
+Görsel revizyon turunun ilk ekranı (hedef tasarım `gorsel-revize/giris-ekrani.jpg`).
+
+**Ses menüye taşındı.** Sustur düğmesi Ayarlar penceresinin içindeydi; artık menü ekranında
+AYARLAR'ın yanında duruyor, pencere içindeki ses kaydıracı kaldırıldı. Gerekçe: müzik
+**yalnızca menüde** çalıyor (odaya girilince susuyor), yani susturma ihtiyacı tam orada
+doğuyor — iki tıklama ötede olması anlamsızdı.
+
+Düğmenin kendisi kopyalanmadı: `SettingsControls.tsx`'teki `VolumeControl`'ün içindeki
+sustur düğmesi **`MuteToggle`** olarak dışa çıkarıldı, `VolumeControl` de artık onu
+kullanıyor. Renk/durum mantığı bileşende, boyut çağıranda (`className`) — menüdeki kare
+düğme ile kaydıracın yanındaki dar düğme aynı mantığı paylaşıyor ama aynı ölçüde değil.
+`VolumeControl` **silinmedi**, oyun içi `SettingsPanel` onu hâlâ kullanıyor.
+
+**Dil seçicide bayrak emojisi kaldırıldı.** Etiketler `🇹🇷 TR` biçimindeydi ama **Windows
+bayrak emojilerini renkli bayrak olarak çizmiyor**, iki harflik kutuya düşürüyor: ekranda
+`TR TR`, `GB EN`, `JP JA`, `KR KO` çıkıyordu — bayrak diye eklenen şey kodun tekrarı gibi
+görünüyordu. Yerine dilin **kendi adı** kondu (Türkçe / English / 日本語 / 한국어);
+`LANGUAGES` içinde `name` alanı zaten vardı, yeni çeviri anahtarı gerekmedi.
+
+Bu, `test:i18n`'de yanlış alarm verdi: `{dil.name}` "çevrilmemiş değer basımı" sayıldı.
+Doğru olan istisna — dil adı **endonim**, her arayüz dilinde aynı kalır (kullanıcı kendi
+dilini kendi dilinde arar). Denetimin `KIMLIK` listesine açıklamasıyla eklendi. Değişken
+bilerek `dil` adını taşıyor ki istisna başka bir `.name` basımını örtmesin.
+
+Doğrulandı: düğme açıkken amber + hoparlör, tıklayınca slate + çarpı ve müzik **duruyor**
+(`pause`), tekrar tıklayınca %50'de geri geliyor (`play vol=0.5`). Ayarlar penceresinde ses
+kaydıracı yok. Dört dilde etiketler doğru, seçili dil amber.
+
+### Ayarlar penceresine kurallar bölümü
+
+Görsel revizyon turunun ikinci ekranı (`gorsel-revize/giris-ayarlar-ekrani.jpg`).
+`RulesSection.tsx` — süre ön ayarının altında, **varsayılan kapalı** açılır bölüm. Kapalı
+başlaması bilinçli: pencerenin asıl işi süre ayarı, kurallar bir kez okunup bırakılan
+referans; açık başlasa her açılışta o kutuyu aşmak gerekirdi.
+
+İçerik üç parça: **rütbe tablosu**, **özel taşlar**, **özel kurallar** (9 madde).
+
+**Tablo elle yazılmadı, `PIECE_DEFINITIONS` + `PIECE_COUNTS`'tan türetiliyor.** Rütbe ya da
+adet değiştiğinde (ki değişti — İzci 4→2) liste kendiliğinden doğru kalıyor. Sabit yazılsaydı
+kural değişikliğinde sessizce yalan söylemeye başlardı.
+
+**Bomba tabloda rütbesiz gösteriliyor.** İç değeri 11 ama bu bir sıralama değeri değil:
+`resolveCombat` Bomba'yı rütbe karşılaştırmasından **önce** ayrı dalda ele alıyor
+(`server.ts:396`). Tabloda "11" yazmak "Mareşal'i yener" gibi yanlış bir izlenim verirdi;
+Bayrak'la birlikte "Özel Taşlar" grubunda, "Hareket edemez" notuyla duruyor.
+
+Kural metinleri koddaki gerçek davranıştan çıkarıldı: `resolveCombat` (Casus/İstihkamcı/eşit
+rütbe), hamle doğrulaması (`server.ts:585-590` — tek kare, düz, geri adım yasak, göl
+geçilemez), `SCOUT_COOLDOWN` ve `MAX_MISSED_TURNS`. Sayılar metne sabit yazılmıyor,
+`{n}` yer tutucusuna sabitlerden basılıyor — sabit değişirse metin de değişir.
+
+17 yeni çeviri anahtarı, dört dilde (141 → 158).
+
+**`test:i18n`'de bir kusur çıktı ve düzeltildi.** Anahtar sayımı yorumları silmiyordu; TR
+bloğuna eklediğim açıklama satırındaki `turetildi:` ve `server.ts:394` iki sahte anahtar
+üretti ve denetim "EN/JA/KO'da eksik" diye bağırdı — oysa çeviriler tamdı. Artık metin
+değerleri boşaltıldıktan **sonra** yorumlar da siliniyor (sıra önemli: bir metin `//`
+içerebilir).
+
+Doğrulandı: kapalı hâli mockup'la aynı; açıldığında 12 hareketli taş rütbe sırasıyla, Bomba
+×4 ve Bayrak ×1 ayrı grupta (toplam 40), dokuz kural maddesi sayılar yerine oturmuş hâlde
+("10 tur bekleme", "3 kez kaçırırsa"). Korece'de başlık, taş adları ve kurallar tamamen
+çevrili.
+
+#### "Eşit rütbede kimse kazanmaz" — yeni kural değil, zaten öyleydi
+
+Kural olarak eklenmesi istendi; kodu okuyunca **zaten uygulanmış** olduğu görüldü
+(`server.ts:605`): eşit rütbede iki taş da yaşıyor, saldıran `from` koordinatına geri
+dönüyor, sıra rakibe geçiyor. Tek fark ikisinin de `revealed = true` olması — yani çarpışma
+bir **istihbarat** aracı: bir tur harcayıp rakibin rütbesini öğreniyorsun.
+
+Kimliklerin gizlenmesi seçenek olarak soruldu, **mevcut davranış korunsun** denildi. Kod
+değişmedi; yalnızca kural metni dört dilde "kimse kazanmaz" ifadesiyle başlayacak şekilde
+netleştirildi.
+
+**Bilinerek bırakılan tutarsızlık:** orman kuralı eşit rütbeye uygulanmıyor. `ATTACKER_WINS`
+ve `DEFENDER_WINS` dallarında kazanan orman karesindeyse gizli kalıyor (`isForestTile`,
+`server.ts:603-604`), ama `EQUAL_RANK` dalında böyle bir kontrol yok — ormanda da ikisi
+açılıyor. Değiştirilmedi.
 
 ### Menüdeki Ayarlar penceresi
 

@@ -21,7 +21,11 @@ const files = [
 
 // Protokol kimligi olan degerler — CEVRILMEMELI, denetimde gormezden gelinir.
 const KIMLIK = [/PLAYERS\./, /'Bomba'/, /'Bayrak'/, /localStorage/, /astact_player_token/,
-  /'1\. Oyuncu'\s*\|/, /:\s*'1\. Oyuncu'/];  // Player tip literali = protokol kimligi
+  /'1\. Oyuncu'\s*\|/, /:\s*'1\. Oyuncu'/,  // Player tip literali = protokol kimligi
+  // Dil adi ENDONIM: "Türkçe" her arayuz dilinde Türkçe yazilir, cevrilmez —
+  // dil secicide kullanici kendi dilini kendi dilinde arar. Degisken bilerek
+  // `dil` adini tasiyor ki bu istisna baska bir `.name` basimini ortmesin.
+  /\{dil\.name\}/];
 
 // Sabit Turkce metin isaretleri: hem ozel karakterler hem ASCII kelimeler.
 const TR_KARAKTER = /[çğıöşüÇĞİÖŞÜ]/;
@@ -120,8 +124,14 @@ for (const L of ['TR', 'EN', 'JA', 'KO']) {
   // (`restartButton: '...', statsButton: '...',`). Satir basina cakili bir desen
   // yalnizca ILKINI sayar ve satir ici anahtarlarin eksigini hic goremez.
   // Once metin degerlerini sil (icindeki `Oda:` gibi iki nokta yanilticidir),
-  // sonra kalan her `anahtar:` eslesmesini al.
-  const degersiz = m[1].replace(/'(?:[^'\\]|\\.)*'/g, "''");
+  // sonra YORUMLARI sil, sonra kalan her `anahtar:` eslesmesini al.
+  // Yorumlar silinmezse blok icindeki bir aciklama satiri anahtar sayiliyor:
+  // `// ... turetildi:` -> `turetildi`, `// bkz. server.ts:394` -> `ts`. Bu, dilden
+  // dile fark uretip denetimi YANLIS yere bagirtiyordu (metinler asli aslinda tamdi).
+  // Sira onemli: once metinler bosaltiliyor, cunku bir metin `//` icerebilir.
+  const degersiz = m[1]
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/\/\/[^\r\n]*/g, '');
   bloklar[L] = new Set([...degersiz.matchAll(/([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g)].map(x => x[1]));
 }
 const temel = bloklar.TR;

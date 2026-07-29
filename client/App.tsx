@@ -1,12 +1,14 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { BoardState, Coords, GamePhase, PlacedPiece, Player, PieceDefinition, SpecialAbility, CombatResult, Language, TimerPreset, TimerConfig, GameStats, OnlineStatus, RestartNotice, GameOverReason, ConnectionNotice, RoomState, TerrainData } from './types';
-import { BOARD_ROWS, BOARD_COLS, LAKE_COORDS, FOREST_COORDS, PIECE_DEFINITIONS, createInitialPiecePool, PLAYERS, TIMER_PRESETS, TRANSLATIONS, MAX_MISSED_TURNS } from './constants';
+import { BOARD_ROWS, BOARD_COLS, LAKE_COORDS, FOREST_COORDS, PIECE_DEFINITIONS, createInitialPiecePool, PLAYERS, TIMER_PRESETS, TRANSLATIONS, MAX_MISSED_TURNS, TOPLAM_TAS } from './constants';
 import Board from './components/Board';
 import SetupUI from './components/SetupUI';
-import SettingsPanel from './components/SettingsPanel';
 import PlayerPanel from './components/PlayerPanel';
 import MenuScreen from './components/MenuScreen';
+import GameHeader from './components/GameHeader';
+import PieceCountChip from './components/PieceCountChip';
+import { kalanTaslarim, rakipKayiplari } from './lib/tasSayimi';
 import RoomCodeModal from './components/RoomCodeModal';
 import MenuSettingsModal from './components/MenuSettingsModal';
 import RestartNoticeModal from './components/RestartNoticeModal';
@@ -195,9 +197,13 @@ const App: React.FC = () => {
             // basiliyor — geri acilmazsa kullanici reddedildigini hic gormuyordu.
             case 'room_error': setOnlineErrorMessage(TR_CODE(msg.code, msg.message)); kastenAyrildiRef.current = true; setIsOnlineModalOpen(true); break;
             // Rakip katildi — kod popup'ina artik gerek yok.
-            case 'room_started_setup': setRoomState(msg.roomState); setIsOnlineModalOpen(false); setScreen('GAME'); setShowRoomCode(false); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
+            // DIKKAT: oyun sonu durumu da temizleniyor. Bu dal fazi GAME_OVER'dan
+            // SETUP'a cekiyor; winner/isTimeoutDraw/gameOverReason bayat kalirsa
+            // sonuc ekrani dizilimin ustunde asili kaliyor (bkz. README, "berabere
+            // sonrasi Yeniden Baslat calismiyor").
+            case 'room_started_setup': setRoomState(msg.roomState); setIsOnlineModalOpen(false); setScreen('GAME'); setShowRoomCode(false); setWinner(null); setGameOverReason(null); setIsTimeoutDraw(false); setRestartNotice(null); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
             case 'player_setup_status': setRoomState(prev => prev ? { ...prev, redReady: msg.redReady, blueReady: msg.blueReady } : prev); break;
-            case 'both_setup_complete': { const mb = createEmptyBoard(terrainRef.current.lakes); mergeBoards(mb, msg.myPieces); mergeBoards(mb, msg.opponentPieces); setBoard(mb); setGamePhase(msg.gamePhase || 'PLAY_RED'); setIsWaitingOpponentSetup(false); setIsOnlineModalOpen(false); soundManager.playVictory(); confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); break; }
+            case 'both_setup_complete': { const mb = createEmptyBoard(terrainRef.current.lakes); mergeBoards(mb, msg.myPieces); mergeBoards(mb, msg.opponentPieces); setBoard(mb); setGamePhase(msg.gamePhase || 'PLAY_RED'); setIsWaitingOpponentSetup(false); setIsOnlineModalOpen(false); setWinner(null); setGameOverReason(null); setIsTimeoutDraw(false); setRestartNotice(null); soundManager.playVictory(); confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); break; }
             // Yeniden baglanmada tahta bastan kuruluyor; eldeki secim de bayat.
             case 'game_state_restored': { const mb = createEmptyBoard(terrainRef.current.lakes); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); setSelectedPiece(null); setValidMoves([]); if (typeof msg.remainingMs === 'number') { const kalan = Math.max(0, Math.ceil(msg.remainingMs / 1000)); sunucuKalanRef.current = kalan; setTurnTimeRemaining(kalan); } if (msg.missedTurns) setMissedTurns(msg.missedTurns); setGamePhase(msg.gamePhase || 'PLAY_RED'); if (msg.gamePhase === 'GAME_OVER') { setWinner(msg.winner ?? null); setGameOverReason(msg.reason ?? null); setIsTimeoutDraw(msg.reason === 'TIMEOUT_DRAW'); setGamePhase('GAME_OVER'); } setOnlineErrorMessage(null); break; }
             // Tur suresini sunucu yurutuyor; sira degisimini o bildiriyor.
@@ -453,7 +459,8 @@ const App: React.FC = () => {
         return rakipHazir ? 'OPPONENT_READY' : 'OPPONENT_SETTING_UP';
     }, [isOnlineMode, myOnlineTeam, roomState, gamePhase, currentPlayer]);
 
-    // Ses hem SettingsPanel'den hem StatsModal'dan değiştirilebiliyor; tek nokta.
+    // Sesin tek giriş noktası: menü ekranındaki sustur düğmesi. Oyun içinde ses
+    // denetimi yok — müzik odaya girilince zaten susuyor.
     const handleVolumeChange = (v: number) => { setVolume(v); soundManager.setVolume(v); };
 
     // Online'da tur süresini ODA KURUCUSU (1. Oyuncu) belirler; katılan oyuncunun
@@ -562,6 +569,38 @@ const App: React.FC = () => {
         }
         return hedefler;
     }, [isOnlineMode, myOnlineTeam, selectedPiece, gamePhase, currentPlayer, board, terrain]);
+
+    // Secili tasin TURUNE ait sayac: elimde kac tane kaldi, rakip o turden kac
+    // kaybetti. Sayim tahtadan ve carpisma gecmisinden turetiliyor (bkz.
+    // lib/tasSayimi.ts) — redCaptured/blueCaptured dizileri online modda hic
+    // dolmadigi icin onlara guvenilemez.
+    const secimSayaci = useMemo(() => {
+        if (!selectedPiece?.name || !gamePhase.startsWith('PLAY')) return null;
+        const benim = (isOnlineMode && myOnlineTeam) ? myOnlineTeam : currentPlayer;
+        if (!benim) return null;
+        return {
+            ad: selectedPiece.name,
+            kalanBende: kalanTaslarim(board, benim)[selectedPiece.name] ?? 0,
+            rakipKaybi: rakipKayiplari(combatHistory, benim)[selectedPiece.name] ?? 0,
+        };
+    }, [selectedPiece, gamePhase, isOnlineMode, myOnlineTeam, currentPlayer, board, combatHistory]);
+
+    // Baslik yuksekligini olcup CSS degiskenine yaziyoruz; tahta genisligi ondan
+    // turetiliyor (bkz. tahtaGenislikSiniri). ResizeObserver sart: baslik sabit
+    // yukseklikte degil — dil degisince metinler sarabiliyor, pencere daralinca
+    // kunye alt satira iniyor.
+    useEffect(() => {
+        if (screen !== 'GAME') return;
+        const baslik = document.querySelector('header');
+        if (!baslik) return;
+        const uygula = () => document.documentElement.style.setProperty(
+            '--baslik-h', `${Math.round(baslik.getBoundingClientRect().height)}px`,
+        );
+        uygula();
+        const gozlemci = new ResizeObserver(uygula);
+        gozlemci.observe(baslik);
+        return () => gozlemci.disconnect();
+    }, [screen]);
 
     // Baglanti seridindeki geri sayim. Sifira inince beklemeye devam eder; oyunu
     // bitirme karari SUNUCUNUN (alarm), istemci yalnizca gosteriyor.
@@ -725,68 +764,61 @@ const App: React.FC = () => {
     // cunku oda kurma/katilma akisi oradan yurutuluyor.
     if (screen === 'MENU') {
         return (<>
-            <MenuScreen lang={lang} onLanguageChange={setLang} onOpenOnline={() => setIsOnlineModalOpen(true)} onOpenSettings={() => setIsMenuSettingsOpen(true)} />
-            <MenuSettingsModal isOpen={isMenuSettingsOpen} onClose={() => setIsMenuSettingsOpen(false)} timerPreset={timerPreset} onPresetChange={handlePresetChange} volume={volume} onVolumeChange={handleVolumeChange} lang={lang} />
+            <MenuScreen lang={lang} onLanguageChange={setLang} onOpenOnline={() => setIsOnlineModalOpen(true)} onOpenSettings={() => setIsMenuSettingsOpen(true)} volume={volume} onVolumeChange={handleVolumeChange} />
+            <MenuSettingsModal isOpen={isMenuSettingsOpen} onClose={() => setIsMenuSettingsOpen(false)} timerPreset={timerPreset} onPresetChange={handlePresetChange} lang={lang} />
             <OnlineModal isOpen={isOnlineModalOpen} onClose={() => setIsOnlineModalOpen(false)} roomCode={roomCode} playerTeam={myOnlineTeam} roomState={roomState} onCreateRoom={handleCreateOnlineRoom} onJoinRoom={handleJoinOnlineRoom} onLeaveRoom={handleLeaveOnlineRoom} errorMessage={onlineErrorMessage} lang={lang} />
         </>);
     }
 
-    // Tahtanin genislik siniri. Tek yerde: hem main'deki tahta sarmalayicisi hem de
-    // basliktaki hizalama bosluğu bunu kullaniyor, yoksa ikisi birbirinden sapardi.
-    // Sabitler: baslik + main dolgusu (online modda baslik bir satir daha uzun),
-    // +32px = ust/alt koordinat seritleri, 1.1 = 11/10 en-boy orani.
-    // DIKKAT: Tailwind JIT sinif adlarini kaynakta ARAR — bu yuzden iki secenek de
-    // tam metin olarak yazili, string birlestirmeyle uretilmiyor.
-    const tahtaGenislikSiniri = isOnlineMode
-        ? 'lg:max-w-[min(900px,calc((100vh-172px)*1.1+32px))]'
-        : 'lg:max-w-[min(900px,calc((100vh-136px)*1.1+32px))]';
+    // Tahtanin genislik siniri. Tahta 11x10 oranli ve YUKSEKLIKTEN sinirlaniyor:
+    // serbest birakilirsa bosalan genisligi alip dikeyde tasiyor.
+    //
+    //   64px = main dolgusu (16 ust + 16 alt) + koordinat seritleri (16 ust + 16 alt)
+    //   1.1  = 11/10 en-boy orani
+    //
+    // Baslik yuksekligi SABIT YAZILMIYOR, olculuyor (--baslik-h). Once iki ayri sabit
+    // vardi (172/136) ve baslik her degistiginde bayatladi — iki kez tahtanin alt
+    // kenari pencereyi asti. Olculen deger o hata sinifini tamamen kapatiyor.
+    // Yedek deger (129px) yalnizca ilk boyamada, olcum yetismezse gecerli.
+    const tahtaGenislikSiniri = 'lg:max-w-[min(1100px,calc((100vh-var(--baslik-h,129px)-64px)*1.1+32px))]';
 
     return (<div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-        {/* Yatay dolgu ic kapsayicilarda: main ile AYNI icerik kutusu olsun diye
-            (main: max-w-7xl + p-2 md:p-4). Baslikta p-3 kalsaydi sag kenarlar tutmazdi. */}
-        <header className="bg-slate-900/90 border-b border-slate-800 py-3 sticky top-0 z-50 backdrop-blur-md">
-            {/* Baslikta logonun KELIME MARKASI bandi kullaniliyor. Tam lockup kare
-                (684x711); yatay baslik seridine sigdirilinca yazi okunmaz hale geliyor.
-                viewBox ile 274-425 satirlari kirpiliyor — "astact" yazisinin tam yeri,
-                olculerek bulundu. Ayri bir dosyaya gerek yok, ayni SVG kullaniliyor.
-                Yazi logoda oldugu icin ayrica <h1>ASTACT</h1> basilmiyor.
-
-                Marka blogu SAGA dayali. Sadece "saga yasla" demek yetmiyordu: main'deki
-                satir justify-center ve tahta yukseklikten sinirli oldugu icin satir
-                kapsayiciyi doldurmuyor, iki yanda bosluk kaliyor — logo panonun ~79px
-                disina tasiyordu. Bu yuzden baslik main'in satir yapisini birebir
-                yansitiyor: once tahta genisliginde gorunmez bir bosluk, sonra pano
-                genisliginde (lg:w-72) marka blogu. Boylece sag kenarlar her pencere
-                boyutunda tutuyor. */}
-            <div className="max-w-7xl mx-auto w-full px-2 md:px-4 flex flex-col lg:flex-row justify-center gap-4">
-                <div className={`flex-grow w-full ${tahtaGenislikSiniri}`} aria-hidden="true" />
-                <div className="w-full lg:w-72 flex-shrink-0 flex flex-col items-end">
-                    <svg viewBox="10 274 674 152" className="h-7 md:h-8 w-auto" role="img" aria-label={t.appTitle}>
-                        <image href="/logo.svg" width="684" height="711" />
-                    </svg>
-                    <p className="mt-0.5 text-right text-[10px] text-slate-400 font-semibold uppercase tracking-widest">{t.appSubtitle}</p>
-                </div>
-            </div>
-            {isOnlineMode && roomState && (<div className="max-w-7xl mx-auto w-full px-2 md:px-4 mt-2 pt-2 border-t border-slate-800/60 flex flex-col lg:flex-row justify-center gap-4 text-[11px] font-mono text-slate-300"><div className={`flex-grow w-full ${tahtaGenislikSiniri}`} aria-hidden="true" /><div className="w-full lg:w-72 flex-shrink-0 flex items-center justify-end gap-3"><span className={`flex items-center gap-1 ${wsRef.current?.readyState === WebSocket.OPEN ? 'text-emerald-400' : 'text-rose-400'}`}><span className={`w-1.5 h-1.5 rounded-full ${wsRef.current?.readyState === WebSocket.OPEN ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>{wsRef.current?.readyState === WebSocket.OPEN ? t.connectedShort : t.disconnectedShort}</span><span>{t.youAre}: <strong className={myOnlineTeam === PLAYERS.RED ? 'text-red-400' : 'text-blue-400'}>{myOnlineTeam === PLAYERS.RED ? t.playerRed : t.playerBlue}</strong></span><span>{t.roomLabel}: <strong className="text-amber-400">{roomCode}</strong></span></div></div>)}
-        </header>
-        <main className="flex-1 flex flex-col lg:flex-row items-start justify-center gap-4 p-2 md:p-4 max-w-7xl mx-auto w-full">
-            {/* Tahta 11x10 oranli; genisligi YUKSEKLIKTEN turetilmis bir sinirla kisitliyoruz,
-                yoksa iki pano saga gecince bosalan genisligi alip dikeyde tasiyor.
-                Sabitler: baslik + main dolgusu (online modda baslik bir satir daha uzun),
-                +32px = ust/alt koordinat seritleri, 1.1 = 11/10 en-boy orani. */}
+        <GameHeader
+            lang={lang}
+            isOnlineMode={isOnlineMode}
+            isConnected={wsRef.current?.readyState === WebSocket.OPEN}
+            roomCode={roomCode}
+            myOnlineTeam={myOnlineTeam}
+            roomState={roomState}
+            gamePhase={gamePhase}
+            onlineStatus={onlineStatus}
+            currentPlayer={currentPlayer}
+            turnTimeRemaining={turnTimeRemaining}
+            onRestart={handleRestartGame}
+            onLeaveRoom={handleLeaveOnlineRoom}
+        />
+        <main className="flex-1 flex items-start justify-center gap-4 p-2 md:p-4 max-w-7xl mx-auto w-full">
             <div className={`relative flex-grow w-full flex items-center justify-center ${tahtaGenislikSiniri}`}>
                 <Board board={board} onSquareClick={handleSquareClick} onDropAction={handleDragDrop} highlightedPiece={pieceToSwap || selectedPiece} validMoves={validMoves} currentPlayer={currentPlayer} perspectivePlayer={isOnlineMode ? myOnlineTeam : currentPlayer} lastCombatCoords={lastCombatCoords} lastMove={lastMove} scoutTargets={scoutTargets} forests={terrain.forests} lang={lang} />
+                {secimSayaci && (
+                    <PieceCountChip
+                        pieceName={secimSayaci.ad}
+                        kalanBende={secimSayaci.kalanBende}
+                        rakipKaybi={secimSayaci.rakipKaybi}
+                        lang={lang}
+                    />
+                )}
                 {(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && (
                     <div className={`absolute top-1/2 -translate-y-1/2 z-30 w-72 max-w-[85%] ${setupSide === 'left' ? 'left-3' : 'right-3'}`}>
                         <SetupUI piecesToPlace={piecesToPlace} selectedPieceName={selectedPieceToPlace?.name} onPieceSelect={setSelectedPieceToPlace} onAutoSetup={handleAutoSetup} onClearSetup={handleClearSetup} onFinishSetup={handleReady} isWaitingOpponent={isWaitingOpponentSetup} lang={lang} player={setupPlayer} />
                     </div>
                 )}
             </div>
-            {/* Iki pano da SAGDA, alt alta: ustte ayarlar, altinda oyuncu panosu. */}
-            <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
-                <SettingsPanel lang={lang} volume={volume} onVolumeChange={handleVolumeChange} isOnlineMode={isOnlineMode} roomCode={roomCode} onOpenOnline={() => setIsOnlineModalOpen(true)} onRestart={handleRestartGame} />
-                <PlayerPanel panelPlayer={PLAYERS.RED} currentPlayer={currentPlayer} gamePhase={gamePhase} combatHistory={combatHistory} redCapturedCount={redCaptured.length} blueCapturedCount={blueCaptured.length} stats={stats} turnTimeRemaining={turnTimeRemaining} missedTurns={missedTurns} isOnlineMode={isOnlineMode} onlineStatus={onlineStatus} lang={lang} />
-            </div>
+            {/* Carpisma gecmisi artik SUTUN degil, sag kenara yapisan bir cekmece:
+                yer ayirmadigi icin tahta bosalan genisligi aliyor. Varsayilan KAPALI —
+                acikken tahtanin ustune bindigi icin acilista kapatmak zorunda
+                kalmak istemiyoruz. */}
+            <PlayerPanel combatHistory={combatHistory} missedTurns={missedTurns} isOnlineMode={isOnlineMode} lang={lang} />
         </main>
         <OnlineModal isOpen={isOnlineModalOpen} onClose={() => setIsOnlineModalOpen(false)} roomCode={roomCode} playerTeam={myOnlineTeam} roomState={roomState} onCreateRoom={handleCreateOnlineRoom} onJoinRoom={handleJoinOnlineRoom} onLeaveRoom={handleLeaveOnlineRoom} errorMessage={onlineErrorMessage} lang={lang} />
         <RoomCodeModal isOpen={showRoomCode} roomCode={roomCode} onClose={() => setShowRoomCode(false)} lang={lang} />
@@ -801,7 +833,7 @@ const App: React.FC = () => {
             mesaj={gamePhase === 'GAME_OVER' ? null : (moveError?.metin ?? null)}
             kaydir={gamePhase !== 'GAME_OVER' && connectionNotice !== null}
         />
-        <GameOverModal winner={winner} isTimeoutDraw={isTimeoutDraw} myTeam={isOnlineMode ? myOnlineTeam : null} reason={gameOverReason} notice={gamePhase === 'GAME_OVER' ? oyunSonuBildirimi : null} gamePhase={gamePhase} onRestart={handleRestartGame} lang={lang} onClose={() => setGamePhase('SETUP_RED')} />
+        <GameOverModal winner={winner} isTimeoutDraw={isTimeoutDraw} myTeam={isOnlineMode ? myOnlineTeam : null} reason={gameOverReason} notice={oyunSonuBildirimi} gamePhase={gamePhase} onRestart={handleRestartGame} lang={lang} />
         {gamePhase !== 'GAME_OVER' && (
             <RestartNoticeModal notice={restartNotice} onConfirm={handleRestartGame} onClose={() => setRestartNotice(null)} lang={lang} />
         )}
