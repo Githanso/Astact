@@ -4,7 +4,7 @@
 // protokol-testi hamle kurallarinda duruyor, carpismaya hic girmiyor.
 //
 // Iki ayri sey olculuyor:
-//   1) KIM KAZANIR  — rutbe siralamasi, Bomba/Istihkamci, Casus/Maresal, esit rutbe.
+//   1) KIM KAZANIR  — rutbe siralamasi, Bomba (iki taraf da olur), Casus/Maresal, esit rutbe.
 //   2) KIM NE OGRENIR — carpisma sonucu her iki oyuncu icin AYRI kurgulaniyor
 //      (cP0/cP1, server.ts:409-410). Rutbe gizleme oyunun temeli; oradaki tek bir
 //      yanlis kosul rakibin tasinin rutbesini sizdirir ve kimse fark etmez.
@@ -196,15 +196,15 @@ console.log("\n=== 2) ZAYIF SALDIRAN OLUR ===");
   await kapat(p1, p2);
 }
 
-// ─── 3) Bomba: uzerine gelen normal tasi yok eder, kendisi kalir ───────────
-console.log("\n=== 3) BOMBA NORMAL TASI YOK EDER ===");
+// ─── 3) Bomba: uzerine gelen tas OLR, bomba da yok olur ────────────────────
+console.log("\n=== 3) BOMBA HER IKI TASI DA YOK EDER ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "Er", 2, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
     [MB, mavi("m1", "Bomba", 11, ACIK_HEDEF.row, ACIK_HEDEF.col, { movable: false })]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
-  check(m1?.combatResult?.outcome === "DEFENDER_WINS", "bombaya basan tas oldu", `(${m1?.combatResult?.outcome})`);
-  check(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]?.name === "Bomba", "bomba yerinde kaldi (sabit)");
+  check(m1?.combatResult?.outcome === "BOTH_LOSE", "bombaya basan tas oldu", `(${m1?.combatResult?.outcome})`);
+  check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "bomba da yok oldu (kare bosaldi)");
   check(bos(m2?.opponentBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "basan tas tahtadan kalkti");
   await kapat(p1, p2);
 }
@@ -212,6 +212,7 @@ console.log("\n=== 3) BOMBA NORMAL TASI YOK EDER ===");
 // ─── 4) Istihkamci (MINER) bombayi imha eder ve kareye gecer ───────────────
 // Sunucu bunu ISIMLE karsilastiriyor (name === "Bomba"), bu yuzden istemci taş
 // adini asla cevirmiyor (client/constants.ts:50). Ad degisirse kural sessizce kirilir.
+// Eski kural korunuyor: Istihkamci imha eder, DIGER taslar bombayla birlikte olur.
 console.log("\n=== 4) ISTIHKAMCI BOMBAYI IMHA EDER ===");
 {
   const { p1, p2 } = await kur(
@@ -241,15 +242,16 @@ console.log("\n=== 5) CASUS MARESAL'I ALIR ===");
   await kapat(p1, p2);
 }
 
-// ─── 6) Maresal Casus'a saldirirsa Casus olur (kural tek yonlu) ───────────
-console.log("\n=== 6) MARESAL SALDIRIRSA CASUS OLUR ===");
+// ─── 6) Maresal Casus'a saldirirsa da Casus kazanir (kural iki yonlu) ─────
+console.log("\n=== 6) MARESAL SALDIRIRSA BILE CASUS KAZANIR ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "Mareşal", 10, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
     [MB, mavi("m1", "Casus", 1, ACIK_HEDEF.row, ACIK_HEDEF.col, { special: "SPY" })]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
-  check(m1?.combatResult?.outcome === "ATTACKER_WINS", "casus avantaji yalnizca SALDIRIRKEN gecerli", `(${m1?.combatResult?.outcome})`);
-  check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "casus tahtadan kalkti");
+  check(m1?.combatResult?.outcome === "DEFENDER_WINS", "savunan casus maresali yendi", `(${m1?.combatResult?.outcome})`);
+  check(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]?.name === "Casus", "casus tahtada kaldi");
+  check(bos(m2?.myBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]), "maresal tahtadan kalkti");
   await kapat(p1, p2);
 }
 
@@ -292,19 +294,19 @@ console.log("\n=== 8) ORMANDA KAZANAN SALDIRAN GIZLI KALIR ===");
   await kapat(p1, p2);
 }
 
-// ─── 9) ORMAN: kazanan SAVUNAN da gizli kalir ─────────────────────────────
-// Saldiran "kaybettim" bilir ama neye kaybettigini bilmez. 3. senaryoda ayni
-// carpisma acik alanda bombayi ele veriyordu.
-console.log("\n=== 9) ORMANDA KAZANAN SAVUNAN GIZLI KALIR ===");
+// ─── 9) ORMAN: bombaya basan da gizli kalir, bomba da yok olur ─────────────
+// Saldiran "kaybettim" bilir ama neye kaybettigini bilmez; bomba ORMANDA
+// oldugu icin kimligi acilmaz (3. senaryoda ayni carpisma acik alandaydi).
+console.log("\n=== 9) ORMANDAKI BOMBA GIZLI KALIR VE YOK OLUR ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "Er", 2, ORMAN_SALDIRAN.row, ORMAN_SALDIRAN.col)],
     [MB, mavi("m1", "Bomba", 11, ORMAN_HEDEF.row, ORMAN_HEDEF.col, { movable: false })]);
   const { m1, m2 } = await hamle(p1, p2, p1, ORMAN_SALDIRAN, ORMAN_HEDEF);
-  check(m1?.combatResult?.outcome === "DEFENDER_WINS", "saldiran oldu", `(${m1?.combatResult?.outcome})`);
+  check(m1?.combatResult?.outcome === "BOTH_LOSE", "saldiran oldu", `(${m1?.combatResult?.outcome})`);
   check(m1?.combatResult?.defenderName === null && m1?.combatResult?.defenderRank === null,
         "neye kaybettigini OGRENEMEDI", `(${m1?.combatResult?.defenderName}/${m1?.combatResult?.defenderRank})`);
-  check(m1?.opponentBoard?.[ORMAN_HEDEF.row]?.[ORMAN_HEDEF.col]?.name === undefined, "tahtada da bomba gizli");
+  check(bos(m1?.opponentBoard?.[ORMAN_HEDEF.row]?.[ORMAN_HEDEF.col]), "bomba da yok oldu (kare bosaldi)");
   check(m2?.combatResult?.attackerName === "Er", "olen saldiran ise aciga cikti", `(${m2?.combatResult?.attackerName})`);
   await kapat(p1, p2);
 }

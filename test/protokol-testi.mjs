@@ -67,10 +67,12 @@ check(!!joined, "Oyuncu2 odaya katildi", joined ? `(takim: ${joined.playerTeam})
 // gol/orman koordinati VARSAYMIYOR: mavinin ilerleyecegi (SATIR,4) karesinin gol
 // olmadigi bir satiri arazinin kendisinden seciyor. Boylece uretici degisince
 // test kendiliginden uyum saglar.
+// r!==2 kosulu: mavi bombasi SABIT (2,3) karesinde; ileri hamle (SATIR,3)'e gidiyor,
+// SATIR=2 secilirse hedef bomba olur ve hamle reddedilir (kendi tasina saldiri).
 const arazi = joined?.roomState?.terrain;
 const golMu = (r, c) => !!arazi?.lakes.some((l) => l.row === r && l.col === c);
 let SATIR = 0;
-for (let r = 0; r < 10; r++) if (!golMu(r, 4)) { SATIR = r; break; }
+for (let r = 0; r < 10; r++) if (!golMu(r, 4) && r !== 2) { SATIR = r; break; }
 check(!!arazi, "arazi room_joined ile geldi");
 check(!golMu(SATIR, 4), `hamleler icin gol olmayan satir secildi (satir ${SATIR})`);
 
@@ -119,7 +121,7 @@ console.log("\n=== 3b) ARAZI URETICI SOZLESMESI ===");
     const ormanKare = arazi.forests.map((f) => `${f.row},${f.col}`);
     const sutun = (kare) => +kare.split(",")[1];
 
-    check(golKare.length === 8, "gol toplami 8 kare", `(${golKare.length})`);
+    check(golKare.length === 6, "gol toplami 6 kare", `(${golKare.length})`);
     check(golKare.every((k) => sutun(k) >= 4 && sutun(k) <= 6),
           "gollerin HEPSI tarafsiz bantta (4-6. sutun)",
           golKare.filter((k) => sutun(k) < 4 || sutun(k) > 6).join(" ") || "");
@@ -181,15 +183,22 @@ await sleep(700);
 const yanal = await waitFor(p1, "move_executed", 2000);
 check(!!yanal, "YANAL hareket (satir ekseni) kabul edildi", yanal ? "" : `(gelen: ${JSON.stringify(p1.messages.map((m) => m.type))})`);
 
-// Geri hareket: mavi icin sola gitmek geridir
+// Geri hareket: mavi icin sola gitmek geridir. ARTIK SERBEST — yon sinirlamasi
+// kaldirildi, yalnizca "tek kare + duz" kurali duruyor (bkz. serbest-hamle-testi).
 p2.messages.length = 0;
 p2.send(JSON.stringify({ type: "move", from: { row: SATIR, col: 3 }, to: { row: SATIR, col: 2 } }));
-await sleep(500);
-check(!!(await waitFor(p2, "move_error", 1500)), "GERI hareket reddedildi");
+await sleep(700);
+check(!!(await waitFor(p2, "move_executed", 2000)), "GERI hareket KABUL EDILDI (yon sinirlamasi yok)");
 
-// Ileri hareket: mavi icin saga gitmek ileridir
+// Sira kirmiziya gecti; ileri hareketi denemek icin bir tur da o oynamali.
+p1.messages.length = 0;
+p1.send(JSON.stringify({ type: "move", from: { row: 4, col: 7 }, to: { row: 5, col: 7 } }));
+await waitFor(p1, "move_executed", 2000);
+
+// Ileri hareket: mavi icin saga gitmek ileridir. Tas bir onceki hamlede 2. sutuna
+// gectigi icin oradan yolluyoruz.
 p2.messages.length = 0;
-p2.send(JSON.stringify({ type: "move", from: { row: SATIR, col: 3 }, to: { row: SATIR, col: 4 } }));
+p2.send(JSON.stringify({ type: "move", from: { row: SATIR, col: 2 }, to: { row: SATIR, col: 3 } }));
 await sleep(700);
 check(!!(await waitFor(p2, "move_executed", 2000)), "ILERI hareket (sutun ekseni) kabul edildi");
 

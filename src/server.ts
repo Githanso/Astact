@@ -21,10 +21,20 @@ interface PieceData {
 
 interface StoredPlayer {
   id: string; name: string; team: Player; ready: boolean; pieces: PieceData[];
+  // "Odadan Cik" dedi mi. Oyun surerken ayrilanin KAYDI duruyor (sonuc ekrani ve
+  // olasi yeniden baglanma icin), ama ardindan gelen soket kapanmasi KOPMA
+  // sayilmamali: kopma isaretlenirse karsi tarafa tam da kaldirmak istedigimiz
+  // "baglantisi koptu" bildirimi gidiyor. undefined = ayrilmadi.
+  left?: boolean;
 }
 
 interface RoomData {
   code: string;
+  // Tek seferlik oda: ikinci oyuncu girip faz SETUP'a cekildigi an true olur.
+  // Kilitli odadan ayrilan oyuncunun SLOTU BOŞALMAZ (yerine 3. kisi gelemez) ve
+  // oda silinince kod bir daha kullanilamaz (bkz. kodKullanildi). LOBİ'de
+  // henuz 2 oyuncu dolmadigi icin false kalir ve katilan geri donebilir.
+  locked: boolean;
   players: [StoredPlayer | null, StoredPlayer | null];
   playerTokens: [string | null, string | null];
   disconnectedAt: [number | null, number | null];
@@ -39,6 +49,10 @@ interface RoomData {
   // istemci cevirirse iki taraf ayrisir (istemci "sira bende" der, sunucu reddeder).
   // null = tur saati islemiyor (LOBBY/SETUP/GAME_OVER).
   turnStartedAt: number | null;
+  // Oyunun (tur) BASLADIGI an. Istemciler "gecen oyun suresi" sayacini bununla
+  // senkron gosterir; tum oyun baslangiclarinda ve yeniden baglanmada yollanir,
+  // yeniden baslatilinca sifirlanir.
+  gameStartedAt: number | null;
   turnTimeMs: number;
   // Suresi doldugu icin kacirilan tur sayisi (slot basina, oyun boyunca birikimli).
   // Iki oyuncu da sinira ulasirsa oyun berabere biter — kimse oynamiyorsa masa
@@ -57,11 +71,22 @@ interface RoomData {
   // sabitinden degil bu listeden ciziyor.
   terrain: Arazi;
   seed: number;
+  // Dizilim suresinin doldugu an (epoch ms). SETUP fazina giris kurulusunda
+  // kurulur; sure dolunca alarm() hazir olmayan oyuncunun taslarini RASTGELE
+  // dizer ve hazir sayar. null = dizilim saati islemiyor (LOBBY/PLAY/GAME_OVER).
+  setupDeadline: number | null;
+  // Bu odanin dizilim suresi. Oyuncu ayari DEGIL: her oda SETUP_SURESI_MS ile
+  // kuruluyor, alan yalnizca testlerin ?setupMs= ile kisaltabilmesi icin var.
+  setupTimeMs: number;
 }
 
 // Oyunun neden bittigi. Istemci ekrandaki metni buna gore seciyor; "kazandin"
 // ile "rakip ayrildigi icin kazandin" ayni sey degil.
-type GameOverReason = "FLAG" | "TIMEOUT_DRAW" | "OPPONENT_LEFT";
+//
+//   OPPONENT_LEFT : baglantisi koptu ve DISCONNECT_TIMEOUT_MS icinde donmedi
+//   OPPONENT_QUIT : "Odadan Cik" dedi — kasitli ayrilma, beklemeye gerek yok
+//   NO_MOVES      : oynayacak tasi kalmadi (yalniz Bomba/Bayrak ya da tikandi)
+type GameOverReason = "FLAG" | "TIMEOUT_DRAW" | "OPPONENT_LEFT" | "OPPONENT_QUIT" | "NO_MOVES";
 
 const BOARD_ROWS = 10, BOARD_COLS = 11;
 // Tarafsiz bant: 4-6. sutunlar. Dizilim bolgeleri mavi 0-3, kirmizi 7-10.
@@ -77,10 +102,9 @@ interface Arazi {
 // loadRoom migration'inda bu atanıyor.
 const ESKI_SABIT_ARAZI: Arazi = {
   lakes: [
-    { row: 1, col: 5 }, { row: 1, col: 6 },
-    { row: 2, col: 5 }, { row: 2, col: 6 },
-    { row: 7, col: 4 }, { row: 7, col: 5 },
-    { row: 8, col: 4 }, { row: 8, col: 5 },
+    { row: 1, col: 5 }, { row: 8, col: 5 },
+    { row: 3, col: 6 }, { row: 6, col: 4 },
+    { row: 4, col: 4 }, { row: 5, col: 6 },
   ],
   forests: [
     { row: 0, col: 4, density: 3 }, { row: 1, col: 4, density: 2 }, { row: 2, col: 4, density: 3 },
@@ -93,7 +117,7 @@ const ESKI_SABIT_ARAZI: Arazi = {
 };
 
 // Arazi sozlesmesi. Degistirilirse test/protokol-testi.mjs senaryo 3b de guncellenmeli.
-const GOL_KARE = 8;          // toplam gol karesi (aynalanmis)
+const GOL_KARE = 6;          // toplam gol karesi (aynalanmis)
 const BANT_ORMAN = 10;       // tarafsiz banttaki orman (aynalanmis)
 const BOLGE_ORMAN = 10;      // HER oyuncunun bolgesindeki orman
 
@@ -120,7 +144,7 @@ function prng(seed: number) {
 //
 // BAGLANTI KONTROLU YOK, gerekmiyor: sol-sag gecisi tamamen kapatmak icin gol
 // bariyerinin 0. satirdan 9. satira kadar HER SATIRA degmesi gerekir, yani en az
-// BOARD_ROWS (10) kare. GOL_KARE 8 oldugu icin bu imkansiz. GOL_KARE 10 veya
+// BOARD_ROWS (10) kare. GOL_KARE 6 oldugu icin bu imkansiz. GOL_KARE 10 veya
 // uzerine cikarilirsa bu gerekce duser ve gercek bir gecilebilirlik kontrolu
 // eklenmelidir.
 function araziUret(seed: number): Arazi {
@@ -156,8 +180,8 @@ function araziUret(seed: number): Arazi {
 
   // ── Goller: ust yarida GOL_KARE/2 kare uretilip aynalaniyor ───────────────
   // Blok boyutlari {1,2,4}. Toplam iki esit yariya bolundugu icin kullanicinin
-  // ornegindeki 4+2+2 gibi tek sayili bilesimler cikmaz; olasi bilesimler
-  // 4+4, 2+2+2+2, (2+1+1)x2, (1+1+1+1)x2.
+  // ornegindeki 4+2+2 gibi tek sayili bilesimler cikmaz; GOL_KARE=6 ile olasi
+  // bilesimler 2+1 ve (1+1+1).
   let kalanGol = GOL_KARE / 2;
   let guvenlik = 0;
   while (kalanGol > 0 && guvenlik++ < 200) {
@@ -213,6 +237,18 @@ const DISCONNECT_TIMEOUT_MS = 60_000;
 // icinde kendi presetini bildirir; bildirmezse bu deger kullanilir.
 const DEFAULT_TURN_TIME_MS = 35_000;
 const MIN_TURN_TIME_MS = 5_000, MAX_TURN_TIME_MS = 600_000;
+// Dizilim suresi HERKES ICIN SABIT: tur suresi gibi presete bagli degil. Sure
+// dolunca hazir olmayan oyuncu RASTGELE dizilip hazir sayilir, boylece dizmeyen
+// oyuncu masayi sonsuza kadar kilitleyemez.
+//
+// Neden ayarlanabilir degil: preset yalnizca oda KURUCUSUNUN menusunden gelir ve
+// ikinci oyuncu katildigi anda saat baslamak zorunda — kurucunun secimi o ana
+// kadar sunucuya ulassa bile katilan oyuncu farkli bir sure gormus oluyordu.
+// Tek sabit bu karisikligi tamamen kaldiriyor.
+const SETUP_SURESI_MS = 180_000;
+// Testler 3 dakika bekleyemez: odayi KURAN baglanti ?setupMs= ile sureyi
+// kisaltabilir (bkz. ?seed=, ayni gerekce). Oyuncu akisinda kullanilmiyor.
+const MIN_SETUP_TIME_MS = 5_000, MAX_SETUP_TIME_MS = 600_000;
 // Istemcideki constants.ts MAX_MISSED_TURNS ile AYNI olmali.
 const MAX_MISSED_TURNS = 3;
 // Izci gorevini kullandiktan sonra hakkin yenilenmesi icin sahibinin oynamasi
@@ -224,6 +260,84 @@ const SCOUT_COOLDOWN = 10;
 const ROOM_TTL_MS = 10 * 60_000;
 function isPlayPhase(phase: RoomData["gamePhase"]): boolean {
   return phase === "PLAY_RED" || phase === "PLAY_BLUE";
+}
+
+// Tas tablosu: istemcideki constants.ts PIECE_DEFINITIONS + PIECE_COUNTS ile
+// BIREBIR ayni. Dizilim suresi dolunca hazir olmayan oyuncunun taslarini SUNUCU
+// rastgele diziyor; bunun icin tanimlari burada da bilmek zorunda.
+const SUNUCU_TAS_TANIMLARI: Record<string, { rank: number; special: string | null; movable: boolean }> = {
+  "Mareşal": { rank: 10, special: null, movable: true },
+  "General": { rank: 9, special: null, movable: true },
+  "Albay": { rank: 8, special: null, movable: true },
+  "Binbaşı": { rank: 7, special: null, movable: true },
+  "Yüzbaşı": { rank: 6, special: null, movable: true },
+  "Üsteğmen": { rank: 5, special: null, movable: true },
+  "Teğmen": { rank: 4, special: null, movable: true },
+  "Astsubay": { rank: 3, special: null, movable: true },
+  "Er": { rank: 2, special: null, movable: true },
+  "İzci": { rank: 2, special: "SCOUT", movable: true },
+  "İstihkamcı": { rank: 1, special: "MINER", movable: true },
+  "Casus": { rank: 1, special: "SPY", movable: true },
+  "Bomba": { rank: 11, special: null, movable: false },
+  "Bayrak": { rank: 0, special: null, movable: false },
+};
+const SUNUCU_TAS_SAYILARI: Record<string, number> = {
+  "Mareşal": 1, "General": 1, "Albay": 2, "Binbaşı": 3, "Yüzbaşı": 4,
+  "Üsteğmen": 4, "Teğmen": 4, "Astsubay": 4, "Er": 5,
+  "İzci": 2, "İstihkamcı": 4, "Casus": 1, "Bomba": 4, "Bayrak": 1,
+};
+
+// Fisher-Yates. `sort(() => Math.random() - 0.5)` YETMIYOR: karsilastirma
+// tutarsiz oldugu icin dagilim duzgun degil, dizinin bas tarafi yerinde kalmaya
+// meyilli. Dizilimde bu, Bayrak'in konumunu sistematik olarak tahmin edilebilir
+// yapardi — rastgele dizilen oyuncu icin dogrudan dezavantaj.
+function karistir<T>(dizi: T[]): T[] {
+  for (let i = dizi.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [dizi[i], dizi[j]] = [dizi[j], dizi[i]];
+  }
+  return dizi;
+}
+
+// setup_complete / setup_update mesajlarindaki taslari PieceData'ya cevirir.
+// Istemci PlacedPiece gonderiyor (position: {row, col}); sunucu row/col'u
+// tasinin ustunde ister.
+function taslaraCevir(placed: any[]): PieceData[] {
+  return (placed || []).map((p: any) => ({
+    id: p.id, name: p.name, rank: p.rank, owner: p.owner,
+    special: p.special || null, movable: p.movable !== false, revealed: false, hasMoved: false, scoutAt: null,
+    row: p.position.row, col: p.position.col,
+  }));
+}
+
+// Dizilim suresi dolan oyuncu icin rastgele dizilim uretir. Zaten dizilmis taslar
+// KORUNUR (yalnizca havuzda kalanlar bos karelere dagitilir); `mevcut` artik
+// setup_update sayesinde kismi dizilimi gercekten tasiyor — istemci her
+// tas degisiminde guncel tahtasini sunucuya akitiyor.
+// Karistirmada Math.random serbest — tekrarlanabilirlik yalnizca arazi icin
+// gerekli (bkz. prng), dizilimin seed'e bagli olmasi gerekmiyor.
+function rastgeleDizilimUret(team: Player, mevcut: PieceData[]): PieceData[] {
+  const cols = team === "1. Oyuncu" ? [7, 8, 9, 10] : [0, 1, 2, 3];
+  const dolu = new Set(mevcut.map(p => `${p.row}-${p.col}`));
+  const bos: { row: number; col: number }[] = [];
+  for (const c of cols) for (let r = 0; r < BOARD_ROWS; r++) if (!dolu.has(`${r}-${c}`)) bos.push({ row: r, col: c });
+  const kalan: { name: string }[] = [];
+  for (const ad in SUNUCU_TAS_SAYILARI) {
+    const dizilen = mevcut.filter(p => p.name === ad).length;
+    for (let i = 0; i < SUNUCU_TAS_SAYILARI[ad] - dizilen; i++) kalan.push({ name: ad });
+  }
+  karistir(bos);
+  karistir(kalan);
+  const yeni: PieceData[] = [];
+  for (let i = 0; i < Math.min(bos.length, kalan.length); i++) {
+    const t = SUNUCU_TAS_TANIMLARI[kalan[i].name];
+    yeni.push({
+      id: crypto.randomUUID(), name: kalan[i].name, rank: t.rank, owner: team,
+      special: t.special, movable: t.movable, revealed: false, hasMoved: false, scoutAt: null,
+      row: bos[i].row, col: bos[i].col,
+    });
+  }
+  return yeni;
 }
 
 export class GameRoom extends DurableObject {
@@ -253,6 +367,13 @@ export class GameRoom extends DurableObject {
           stored.terrain = ESKI_SABIT_ARAZI;
           stored.seed = 0;
         }
+        // Dizilim saati sonradan eklendi. Eski odalarda alan yok: SETUP'ta kalan
+        // odaya simdiden itibaren tam sure ver, diger fazlarda saat islemesin.
+        if (typeof stored.setupTimeMs !== "number") stored.setupTimeMs = SETUP_SURESI_MS;
+        if (stored.setupDeadline === undefined) stored.setupDeadline = stored.gamePhase === "SETUP" ? Date.now() + stored.setupTimeMs : null;
+        // Tek seferlik oda kilidi sonradan eklendi. Eski odalarda undefined:
+        // oyun devam ediyorsa kilitli say (3. kisi giremesin), lobideyse acik birak.
+        if (stored.locked === undefined) stored.locked = stored.gamePhase !== "LOBBY";
         for (const p of stored.players) {
           if (!p) continue;
           for (const tas of p.pieces) {
@@ -271,6 +392,10 @@ export class GameRoom extends DurableObject {
 
   private async deleteRoom() {
     this.room = null;
+    // Kod tek seferlik: oda (oyun bitip silinerek veya bos lobide cikarak)
+    // kapatildiktan sonra ayni kodla yeni oda kurulamaz. Bayrak DO instance'i
+    // silinene kadar kalici durur; yeni baglantilar ROOM_CLOSED alir.
+    await this.ctx.storage.put("kodKullanildi", true);
     await this.ctx.storage.delete("room");
   }
 
@@ -299,6 +424,7 @@ export class GameRoom extends DurableObject {
       if (r.disconnectedAt[i] !== null) deadlines.push(r.disconnectedAt[i]! + DISCONNECT_TIMEOUT_MS);
     }
     if (r.turnStartedAt !== null && isPlayPhase(r.gamePhase)) deadlines.push(r.turnStartedAt + r.turnTimeMs);
+    if (r.gamePhase === "SETUP" && r.setupDeadline !== null) deadlines.push(r.setupDeadline);
     if (r.gameOverAt !== null && r.gamePhase === "GAME_OVER") deadlines.push(r.gameOverAt + ROOM_TTL_MS);
     if (deadlines.length === 0) { await this.ctx.storage.deleteAlarm(); return; }
     await this.ctx.storage.setAlarm(Math.min(...deadlines));
@@ -343,6 +469,11 @@ export class GameRoom extends DurableObject {
       // Tur suresini oda kurucusu belirliyor; katilan oyuncu daha odaya girerken
       // gercek degeri gormeli, yoksa kendi presetiyle yanlis geri sayim yapar.
       turnTimeMs: r.turnTimeMs,
+      // Dizilim saati de sunucudan okunuyor. MUTLAK son tarih DEGIL, KALAN sure
+      // yollaniyor (tur saatindeki remainingMs ile ayni gerekce): istemcinin
+      // sistem saati kayiksa mutlak damga dakikalarca yanlis sayardi.
+      setupTimeMs: r.setupTimeMs,
+      setupRemainingMs: r.setupDeadline === null ? null : Math.max(0, r.setupDeadline - Date.now()),
       // Arazi her oyunda uretildigi icin istemci onu SUNUCUDAN almak zorunda;
       // eskiden kendi sabitinden ciziyordu. roomState tasiyan her mesajda gidiyor.
       terrain: r.terrain,
@@ -365,6 +496,33 @@ export class GameRoom extends DurableObject {
   }
   private isForest(r: number, c: number): boolean {
     return !!this.room?.terrain.forests.some(f => f.row === r && f.col === c);
+  }
+
+  // Bu oyuncunun oynayabilecegi BIR hamle var mi? Iki ayri kilitlenme bunu
+  // gerektiriyor:
+  //   1) elinde yalnizca Bomba/Bayrak kaldi (movable:false), bir daha oynayamaz,
+  //   2) hareket edebilen taslari var ama hepsi kendi taslari/goller/kenarlarla
+  //      cevrili, gidecek kare yok.
+  // Ikisinde de oyun eskiden sonsuza kadar surerdi. Rakip tasi DOLU kare gecerli
+  // hedef sayilir — uzerine gitmek saldiridir.
+  private hamlesiVarMi(slot: number): boolean {
+    const r = this.room;
+    if (!r) return true;
+    const ben = r.players[slot];
+    if (!ben) return true;
+    const kendiKareler = new Set(ben.pieces.map(p => `${p.row},${p.col}`));
+    const yonler = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    for (const t of ben.pieces) {
+      if (!t.movable) continue;
+      for (const [dr, dc] of yonler) {
+        const nr = t.row + dr, nc = t.col + dc;
+        if (nr < 0 || nr >= BOARD_ROWS || nc < 0 || nc >= BOARD_COLS) continue;
+        if (this.isLake(nr, nc)) continue;
+        if (kendiKareler.has(`${nr},${nc}`)) continue;
+        return true;
+      }
+    }
+    return false;
   }
 
   // Izci gorevine kac tur kaldi. 0 = hazir. scoutAt null ise hic kullanilmamis.
@@ -393,8 +551,15 @@ export class GameRoom extends DurableObject {
 
   private resolveCombat(a: PieceData, d: PieceData): { outcome: string; attacker: PieceData; defender: PieceData } {
     if (d.name === "Bayrak") return { outcome: "GAME_OVER", attacker: a, defender: d };
-    if (d.name === "Bomba") { if (a.special === "MINER") return { outcome: "ATTACKER_WINS", attacker: a, defender: d }; return { outcome: "DEFENDER_WINS", attacker: a, defender: d }; }
+    // Bomba: ISTIHKAMCI imha eder ve kareye gecer (eski kural, dokunulmadi).
+    // Diger tum taslar bombaya temas edince OLR ve bomba da yok olur.
+    if (d.name === "Bomba") { if (a.special === "MINER") return { outcome: "ATTACKER_WINS", attacker: a, defender: d }; return { outcome: "BOTH_LOSE", attacker: a, defender: d }; }
+    // Casus HER KOSULDA Maresal'i yener — ister saldirsin ister savunsun. Kural
+    // iki yonlu oldugu icin hem saldiri (a SPY, d Maresal) hem savunma (d SPY,
+    // a Maresal) dali var. Eskiden yalnizca saldiri tarafiydi; Maresal Casus'a
+    // saldirinca rutbe karsilastirmasi (10>1) devreye girip Maresal kazaniyordu.
     if (a.special === "SPY" && d.rank === 10) return { outcome: "ATTACKER_WINS", attacker: a, defender: d };
+    if (d.special === "SPY" && a.rank === 10) return { outcome: "DEFENDER_WINS", attacker: a, defender: d };
     if (a.rank > d.rank) return { outcome: "ATTACKER_WINS", attacker: a, defender: d };
     if (a.rank < d.rank) return { outcome: "DEFENDER_WINS", attacker: a, defender: d };
     return { outcome: "EQUAL_RANK", attacker: a, defender: d };
@@ -419,6 +584,15 @@ export class GameRoom extends DurableObject {
       const pair = new WebSocketPair();
       const [server, client] = Object.values(pair);
       await this.loadRoom();
+      // Tek seferlik oda: bu koddaki oyun (gecikerek veya bos lobiden cikarak)
+      // sona erdiyse kod bir daha kullanilamaz. Oda yok ama bayrak duruyor —
+      // yeni baglantiya ROOM_CLOSED donuyoruz.
+      if (!this.room && (await this.ctx.storage.get<boolean>("kodKullanildi"))) {
+        this.ctx.acceptWebSocket(server);
+        try { server.send(JSON.stringify({ type: "room_error", code: "ROOM_CLOSED", message: "Bu oda kodu bir kez kullanıldı" })); } catch (e) {}
+        try { server.close(4003, "Bu oda kodu bir kez kullanıldı"); } catch (e) {}
+        return new Response(null, { status: 101, webSocket: client });
+      }
       // Bos isim korunur; getRoomState null dondurur ve istemci kendi dilindeki
       // etiketi (t.playerRed / t.playerBlue) gosterir.
       const playerName = url.searchParams.get("name") ?? "";
@@ -467,7 +641,18 @@ export class GameRoom extends DurableObject {
       // Create room if new
       if (!this.room) {
         const code = this.ctx.id.name ?? url.searchParams.get("room") ?? "";
-        this.room = { code, players: [null, null], playerTokens: [null, null], disconnectedAt: [null, null], gamePhase: "LOBBY", winner: null, gameOverReason: null, restartRequested: [false, false], turnStartedAt: null, turnTimeMs: DEFAULT_TURN_TIME_MS, missedTurns: [0, 0], gameOverAt: null, turnCount: [0, 0], terrain: ESKI_SABIT_ARAZI, seed: 0 };
+        // ?setupMs=... YALNIZCA testler icin: dizilim suresi normalde herkes icin
+        // SETUP_SURESI_MS (180sn) ve oyuncu ayari degil. Oda kurulurken bir kez
+        // okunuyor, sonradan gelen baglantilar degistiremiyor.
+        const setupParam = Number(url.searchParams.get("setupMs"));
+        const setupMs = url.searchParams.get("setupMs") && Number.isFinite(setupParam)
+          ? Math.max(MIN_SETUP_TIME_MS, Math.min(MAX_SETUP_TIME_MS, Math.round(setupParam)))
+          : SETUP_SURESI_MS;
+        this.room = { code, locked: false, players: [null, null], playerTokens: [null, null], disconnectedAt: [null, null], gamePhase: "LOBBY", winner: null, gameOverReason: null, restartRequested: [false, false], turnStartedAt: null, gameStartedAt: null, turnTimeMs: DEFAULT_TURN_TIME_MS, missedTurns: [0, 0], gameOverAt: null, turnCount: [0, 0], terrain: ESKI_SABIT_ARAZI, seed: 0, setupDeadline: null, setupTimeMs: setupMs };
+        // Arazi oda kurulur kurulmaz RANDOM uretilir: her oda/oyun farkli gollerle
+        // baslar, sabit bir desen hicbir zaman gorunmez. (2. oyuncu katildiginda
+        // ?seed= verilirse o tohumla yeniden uretilecek — yalnizca testler icin.)
+        this.araziYenile();
       }
       // Yerel bagli degisken: this.room uzerindeki daraltma ara fonksiyon
       // cagrilarinda kayboluyor, bu yuzden non-null referansi bir kez aliyoruz.
@@ -480,11 +665,17 @@ export class GameRoom extends DurableObject {
         room.playerTokens[slot] = playerToken;
       } else {
         room.players[slot]!.name = playerName;
+        // Ayrilmis oyuncu geri geldi: bundan sonraki kapanmalari yeniden KOPMA
+        // saymaliyiz, yoksa gercek bir kopma sessizce yutulurdu.
+        room.players[slot]!.left = false;
       }
       room.disconnectedAt[slot] = null;
 
       if (room.players[0] && room.players[1] && room.gamePhase === "LOBBY") {
         room.gamePhase = "SETUP";
+        // Oda artik doldu: kod bu andan itibaren tek seferlik. Ayrilan oyuncunun
+        // slotu boşalmayacak, yerine 3. kisi giremeyecek (bkz. leave_room).
+        room.locked = true;
         // Arazi tam BURADA uretiliyor: oyuncular dizilim yaparken tahtayi
         // gormeli. Daha erken uretmek (oda kurulurken) yanlis olmazdi ama daha
         // gec uretmek — orn. oyun baslarken — dizilimi ezberden yaptirirdi.
@@ -494,9 +685,13 @@ export class GameRoom extends DurableObject {
         // tahta, boylece orman/gol koordinatina dayanan senaryolar yazilabiliyor.
         const seedParam = Number(url.searchParams.get("seed"));
         this.araziYenile(Number.isFinite(seedParam) && url.searchParams.get("seed") ? seedParam : undefined);
+        // Dizilim saati burada kuruluyor: ikinci oyuncu katilip faz SETUP'a
+        // cekildigi AN baslar. Sure dolunca alarm() hazir olmayani rastgele dizer.
+        room.setupDeadline = Date.now() + room.setupTimeMs;
       }
 
       await this.saveRoom();
+      await this.scheduleAlarm();
 
       if (room.gamePhase === "LOBBY" || (room.players[0] && !room.players[1])) {
         this.sendTo(slot, { type: "room_created", roomCode: room.code, playerTeam: team, roomState: this.getRoomState() });
@@ -513,6 +708,7 @@ export class GameRoom extends DurableObject {
             gamePhase: room.gamePhase,
             terrain: room.terrain,
             turnTimeMs: room.turnTimeMs,
+            gameStartedAt: room.gameStartedAt,
             // Yeniden baglanan oyuncu geri sayima turun KALAN suresinden devam etmeli.
             remainingMs: this.turnRemainingMs(),
             missedTurns: this.missedTurnsView(),
@@ -545,12 +741,15 @@ export class GameRoom extends DurableObject {
 
       switch (msg.type) {
         case "setup_complete": {
+          // Faz korumasi SART. Dizilim suresi dolunca alarm() oyuncuyu rastgele
+          // dizip fazi PLAY'e cekiyor; tam o anda "Hazir"a basilmis ya da kopan
+          // baglantinin kuyrugunda bekleyen bir setup_complete sonradan gelirse
+          // burasi kosulsuz calisirdi: taslar eksik listeyle ezilir, iki taraf da
+          // hazir gorunup blok yeniden isler, turnStartedAt sifirlanir ve
+          // both_setup_complete yeniden yayinlanarak SUREN OYUN basa sarardi.
+          if (room.gamePhase !== "SETUP") break;
           room.players[playerSlot]!.ready = true;
-          room.players[playerSlot]!.pieces = (msg.placedPieces || []).map((p: any) => ({
-            id: p.id, name: p.name, rank: p.rank, owner: p.owner,
-            special: p.special || null, movable: p.movable !== false, revealed: false, hasMoved: false, scoutAt: null,
-            row: p.position.row, col: p.position.col,
-          }));
+          room.players[playerSlot]!.pieces = taslaraCevir(msg.placedPieces);
           // Tur suresini oda kurucusu (slot 0) belirler; iki oyuncu farkli preset
           // secmis olabilir, tek bir degerde karar kilinmasi sart.
           if (playerSlot === 0 && typeof msg.turnTime === "number" && isFinite(msg.turnTime)) {
@@ -560,13 +759,30 @@ export class GameRoom extends DurableObject {
           if (room.players[0]?.ready && room.players[1]?.ready) {
             room.gamePhase = "PLAY_RED";
             room.turnStartedAt = Date.now();
+            room.gameStartedAt = Date.now();
+            room.setupDeadline = null;
             const p0 = room.players[0]!.pieces, p1 = room.players[1]!.pieces;
-            const saat = { turnTimeMs: room.turnTimeMs, remainingMs: room.turnTimeMs, terrain: room.terrain };
+            const saat = { turnTimeMs: room.turnTimeMs, remainingMs: room.turnTimeMs, terrain: room.terrain, gameStartedAt: room.gameStartedAt };
             this.sendTo(0, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p0, true, room.turnCount[0]), opponentPieces: this.buildBoardView(p1, false) });
             this.sendTo(1, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p1, true, room.turnCount[1]), opponentPieces: this.buildBoardView(p0, false) });
           }
           await this.saveRoom();
           await this.scheduleAlarm();
+          break;
+        }
+        case "setup_update": {
+          // Kismi dizilim: istemci her tas koydugunda/kaldirdiginda guncel
+          // tahtasini gonderiyor. Sure dolunca alarm() bu listeyi KORUYUP kalan
+          // taslari rastgele dizer (rastgeleDizilimUret `mevcut`'u korur) —
+          // sunucu yoksa oyuncunun dizdiklerini bilemez ve 40 tasi da rastgele
+          // dizerdi. setup_complete gibi faz korumasi SART: alarm oyuncuyu
+          // rastgele dizip ready yaptiktan sonra gelen bir guncelleme, eksik
+          // listeyle hazir dizilimi ezmemeli.
+          if (room.gamePhase !== "SETUP") break;
+          const guncel = room.players[playerSlot];
+          if (!guncel || guncel.ready) break;
+          guncel.pieces = taslaraCevir(msg.placedPieces);
+          await this.saveRoom();
           break;
         }
         case "move": {
@@ -578,12 +794,11 @@ export class GameRoom extends DurableObject {
           const movedPiece = player.pieces.find(p => p.row === from.row && p.col === from.col);
           if (!movedPiece) { ws.send(JSON.stringify({ type: "move_error", code: "PIECE_NOT_FOUND", message: "Taş bulunamadı" })); return; }
           if (!movedPiece.movable) { ws.send(JSON.stringify({ type: "move_error", code: "PIECE_IMMOBILE", message: "Bu taş hareket edemez" })); return; }
-          const isRed = player.team === "1. Oyuncu";
           const dr = to.row - from.row, dc = to.col - from.col;
-          // Tahta 10 satir x 11 sutun; oyuncular SAG-SOL karsi karsiya.
-          // Kirmizi 7-10. sutunlarda, sola ilerler (dc<0). Mavi 0-3'te, saga (dc>0).
-          if (isRed && dc > 0) { ws.send(JSON.stringify({ type: "move_error", code: "BACKWARD", message: "Geri adım yasak!" })); return; }
-          if (!isRed && dc < 0) { ws.send(JSON.stringify({ type: "move_error", code: "BACKWARD", message: "Geri adım yasak!" })); return; }
+          // Tahta 10 satir x 11 sutun; oyuncular SAG-SOL karsi karsiya (kirmizi
+          // 7-10, mavi 0-3. sutunlar). Yon SERBEST: ileri, geri, saga, sola tek
+          // kare. Eskiden geri adim (kirmizi icin dc>0, mavi icin dc<0) yasakti;
+          // kural kaldirildi, yalnizca "tek kare + duz" siniri kaldi.
           if (Math.abs(dc) > 1 || Math.abs(dr) > 1) { ws.send(JSON.stringify({ type: "move_error", code: "ONE_SQUARE", message: "Bir kare hareket" })); return; }
           if (Math.abs(dr) + Math.abs(dc) !== 1) { ws.send(JSON.stringify({ type: "move_error", code: "STRAIGHT_ONLY", message: "Sadece düz hareket" })); return; }
           if (to.row < 0 || to.row >= BOARD_ROWS || to.col < 0 || to.col >= BOARD_COLS) { ws.send(JSON.stringify({ type: "move_error", code: "OUT_OF_BOUNDS", message: "Sınır dışı" })); return; }
@@ -602,8 +817,31 @@ export class GameRoom extends DurableObject {
             switch (combatResult.outcome) {
               case "ATTACKER_WINS": opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); if (!isForestTile) movedPiece.revealed = true; targetPiece.revealed = true; break;
               case "DEFENDER_WINS": player.pieces = player.pieces.filter(p => p.id !== movedPiece.id); if (!isForestTile) targetPiece.revealed = true; movedPiece.revealed = true; break;
+              // Bomba da BOTH_LOSE: hem basan tas hem bomba tahtadan kalkar.
+              // Saldiran kime ne oldugunu (Bomba) ancak ACIK alanda ogrenir;
+              // ormandaki bombayi yok eder ama kimligini goremez.
+              case "BOTH_LOSE": player.pieces = player.pieces.filter(p => p.id !== movedPiece.id); opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); if (!isForestTile) targetPiece.revealed = true; movedPiece.revealed = true; break;
               case "EQUAL_RANK": movedPiece.revealed = true; targetPiece.revealed = true; movedPiece.row = from.row; movedPiece.col = from.col; break;
               case "GAME_OVER": opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); movedPiece.revealed = true; room.gamePhase = "GAME_OVER"; room.winner = player.team; room.gameOverReason = "FLAG"; room.gameOverAt = Date.now(); newWinner = player.team; break;
+            }
+          }
+          // Bitis sebebi tek degiskende toplaniyor: yayin asagida bir kez yapiliyor
+          // ve beraberlikte (winner null) de calismasi gerekiyor — eskiden yalnizca
+          // "newWinner varsa" yayinlaniyordu.
+          let bitisSebebi: GameOverReason | null = newWinner ? "FLAG" : null;
+          // Carpismadan sonra bir taraf oynayamaz hale gelmis olabilir: son hareketli
+          // tasini kaybetmis (elinde Bomba/Bayrak kalmis) ya da tikanmis olabilir.
+          // IKI taraf da denetleniyor — saldiran da son hareketli tasini kaybederek
+          // kendini kilitleyebilir. Ikisi birden oynayamiyorsa berabere.
+          if (room.gamePhase !== "GAME_OVER") {
+            const kirmiziOynayabilir = this.hamlesiVarMi(0), maviOynayabilir = this.hamlesiVarMi(1);
+            if (!kirmiziOynayabilir || !maviOynayabilir) {
+              room.gamePhase = "GAME_OVER";
+              room.winner = !kirmiziOynayabilir && !maviOynayabilir ? null : (kirmiziOynayabilir ? "1. Oyuncu" : "2. Oyuncu");
+              room.gameOverReason = "NO_MOVES";
+              room.gameOverAt = Date.now();
+              newWinner = room.winner;
+              bitisSebebi = "NO_MOVES";
             }
           }
           if (room.gamePhase !== "GAME_OVER") room.gamePhase = room.gamePhase === "PLAY_RED" ? "PLAY_BLUE" : "PLAY_RED";
@@ -631,7 +869,7 @@ export class GameRoom extends DurableObject {
           } : null;
           this.sendTo(0, { ...base, combatResult: carpismaGorunumu(isP0), myBoard: this.buildBoardView(p0, true, room.turnCount[0]), opponentBoard: this.buildBoardView(p1, false) });
           this.sendTo(1, { ...base, combatResult: carpismaGorunumu(!isP0), myBoard: this.buildBoardView(p1, true, room.turnCount[1]), opponentBoard: this.buildBoardView(p0, false) });
-          if (newWinner) { this.broadcast({ type: "game_over", winner: newWinner, reason: "FLAG" as GameOverReason }); }
+          if (bitisSebebi) { this.broadcast({ type: "game_over", winner: room.winner, reason: bitisSebebi }); }
           await this.saveRoom();
           await this.scheduleAlarm();
           break;
@@ -716,6 +954,66 @@ export class GameRoom extends DurableObject {
           this.broadcast({ type: "turn_time_changed", turnTimeMs: room.turnTimeMs });
           break;
         }
+        // ─── Kasitli ayrilma ("Odadan Cik") ────────────────────────────────────
+        //
+        // Kopma DEGIL. Ayrimi yapmadan once istemci yalnizca WS'i kapatiyordu ve
+        // sunucu bunu kopma saniyordu: karsi tarafta "baglantin koptu, 60sn icinde
+        // donmezse..." seridi cikiyor, oyun 60sn bosuna bekliyordu. Oysa ayrilan
+        // geri DONMEYECEK; kararini bildirdi.
+        case "leave_room": {
+          const digerSlot = playerSlot === 0 ? 1 : 0;
+          // Oyun SURERKEN cikmak = terk etmek. Kalan oyuncu hukmen kazanir.
+          if (isPlayPhase(room.gamePhase) && room.players[digerSlot]) {
+            room.gamePhase = "GAME_OVER";
+            room.winner = digerSlot === 0 ? "1. Oyuncu" : "2. Oyuncu";
+            room.gameOverReason = "OPPONENT_QUIT";
+            room.gameOverAt = Date.now();
+            room.turnStartedAt = null;
+            room.disconnectedAt[playerSlot] = null;
+            room.players[playerSlot]!.left = true;
+            await this.saveRoom();
+            this.broadcast({ type: "game_over", winner: room.winner, reason: room.gameOverReason, leftSlot: playerSlot });
+            await this.scheduleAlarm();
+            break;
+          }
+          // Oyun SONUNDA (kilitli odada) ayrilma: oda HERKES icin kapanir.
+          // Ayrilan donmeyecegi icin kalan oyuncuyu "Yeniden Baslat" onayinda
+          // bekletmek anlamsiz; o da lobiye (ana menuye) doner.
+          if (room.locked && room.gamePhase === "GAME_OVER") {
+            room.players[playerSlot]!.left = true;
+            room.disconnectedAt[playerSlot] = null;
+            const digerWs = this.getWsBySlot(digerSlot);
+            if (digerWs && digerWs.readyState === WebSocket.OPEN) {
+              try { digerWs.send(JSON.stringify({ type: "room_closed" })); } catch (e) {}
+            }
+            await this.deleteRoom();
+            await this.ctx.storage.deleteAlarm();
+            break;
+          }
+          // Lobi veya dizilim: slot bosalir, oda LOBBY'ye doner, kalan oyuncu
+          // yeni rakip bekler. Dizilim saati de durur (tek basina kalan rastgele
+          // dizilmesin). Dizilimden donuste oda yeniden kullanilabilir.
+          room.players[playerSlot] = null;
+          room.playerTokens[playerSlot] = null;
+          room.disconnectedAt[playerSlot] = null;
+          room.restartRequested[playerSlot] = false;
+          if (room.gamePhase === "SETUP") {
+            room.gamePhase = "LOBBY";
+            room.locked = false;
+            room.setupDeadline = null;
+            const kalanOyuncu = room.players[digerSlot];
+            if (kalanOyuncu) { kalanOyuncu.ready = false; kalanOyuncu.pieces = []; }
+          }
+          if (!room.players[0] && !room.players[1]) {
+            await this.deleteRoom();
+            await this.ctx.storage.deleteAlarm();
+            break;
+          }
+          await this.saveRoom();
+          this.broadcast({ type: "player_connection_change", roomState: this.getRoomState() });
+          await this.scheduleAlarm();
+          break;
+        }
         case "request_restart": {
           room.restartRequested[playerSlot] = true;
           this.broadcast({ type: "restart_requested", slot: playerSlot });
@@ -724,6 +1022,8 @@ export class GameRoom extends DurableObject {
             room.restartRequested = [false, false];
             room.gamePhase = "SETUP"; room.winner = null; room.gameOverReason = null;
             room.turnStartedAt = null; // dizilim asamasinda tur saati islemez
+            room.gameStartedAt = null; // yeni oyun baslayinca tekrar kurulur
+            room.setupDeadline = Date.now() + room.setupTimeMs; // dizilim saati yeniden kurulur
             room.gameOverAt = null;
             room.missedTurns = [0, 0];
             room.turnCount = [0, 0]; // Izci bekleme sayaci da bastan baslar
@@ -745,6 +1045,11 @@ export class GameRoom extends DurableObject {
     const att = ws.deserializeAttachment() as { slot: number } | null;
     if (!att) return;
     const slot = att.slot;
+    // "Odadan Cik" diyen oyuncunun slotu leave_room'da ya bosaltildi ya da `left`
+    // ile isaretlendi; hemen ardindan gelen bu kapanmayi KOPMA saymak, karsi
+    // tarafta tam da kaldirmak istedigimiz "baglanti koptu" bildirimini geri
+    // getirirdi (istemci seridi bununla aciyor).
+    if (!room.players[slot] || room.players[slot]!.left) return;
     room.disconnectedAt[slot] = Date.now();
     await this.saveRoom();
     this.broadcast({ type: "player_connection_change", roomState: this.getRoomState() });
@@ -764,6 +1069,35 @@ export class GameRoom extends DurableObject {
     if (room.gamePhase === "GAME_OVER" && room.gameOverAt !== null && (now - room.gameOverAt) >= ROOM_TTL_MS) {
       await this.deleteRoom();
       await this.ctx.storage.deleteAlarm();
+      return;
+    }
+
+    // 0.5) Dizilim suresi doldu mu? Hazir olmayan oyuncunun kalan taslari
+    // SUNUCUDA rastgele dizilir ve hazir sayilir — oyuncu basina gelmese bile
+    // oyun kilitlenmeden baslar. Kismi dizilim korunur (bkz. rastgeleDizilimUret).
+    if (room.gamePhase === "SETUP" && room.setupDeadline !== null && now >= room.setupDeadline) {
+      for (let i = 0; i < 2; i++) {
+        const p = room.players[i];
+        if (p && !p.ready) {
+          p.pieces.push(...rastgeleDizilimUret(p.team, p.pieces));
+          p.ready = true;
+        }
+      }
+      room.setupDeadline = null;
+      if (room.players[0]?.ready && room.players[1]?.ready) {
+        room.gamePhase = "PLAY_RED";
+        room.turnStartedAt = now;
+        room.gameStartedAt = now;
+        const p0 = room.players[0]!.pieces, p1 = room.players[1]!.pieces;
+        const saat = { turnTimeMs: room.turnTimeMs, remainingMs: room.turnTimeMs, terrain: room.terrain, gameStartedAt: room.gameStartedAt };
+        await this.saveRoom();
+        this.sendTo(0, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p0, true, room.turnCount[0]), opponentPieces: this.buildBoardView(p1, false) });
+        this.sendTo(1, { type: "both_setup_complete", gamePhase: "PLAY_RED", ...saat, myPieces: this.buildBoardView(p1, true, room.turnCount[1]), opponentPieces: this.buildBoardView(p0, false) });
+        await this.scheduleAlarm();
+        return;
+      }
+      await this.saveRoom();
+      await this.scheduleAlarm();
       return;
     }
 
