@@ -3,10 +3,10 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port 8787",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "clean:assets": "node -e \"const fs=require('fs'),p='public/assets';if(fs.existsSync(p))for(const f of fs.readdirSync(p))fs.rmSync(p+'/'+f,{recursive:true,force:true})\"",
+    "clean:assets": "node -e \"const fs=require('fs'),p='public/assets';if(fs.existsSync(p))for(const f of fs.readdirSync(p))if(/^index-.*\\.(js|css)$/.test(f))fs.rmSync(p+'/'+f,{recursive:true,force:true})\"",
     "build:client": "npm run clean:assets && npm --prefix client run build",
     "test:protokol": "node test/protokol-testi.mjs",
     "test:i18n": "node test/i18n-denetim.mjs",
@@ -16,7 +16,11 @@
     "test:yeniden-baslat": "node test/yeniden-baslat-testi.mjs",
     "test:carpisma": "node test/carpisma-testi.mjs",
     "test:izci": "node test/izci-testi.mjs",
-    "test:sayim": "node test/tas-sayimi-testi.mjs"
+    "test:sayim": "node test/tas-sayimi-testi.mjs",
+    "test:dizilim-saati": "node test/dizilim-saati-testi.mjs",
+    "test:serbest-hamle": "node test/serbest-hamle-testi.mjs",
+    "test:oda-terk": "node test/oda-terk-testi.mjs",
+    "test:oda-kilit": "node test/oda-kilit-testi.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260722.1",

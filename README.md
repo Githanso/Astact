@@ -1475,6 +1475,106 @@ Ders: bu tür bir eksen değişikliğinde `BOARD_ROWS`/`BOARD_COLS` ve dizilim a
 **her** yeri tek tek doğrulamak gerekiyor; `tsc` bu hataları yakalamıyor çünkü tipler doğru,
 sadece değerler geçersiz.
 
+### Sırası olmayan oyuncunun taşları soluk
+
+Sıranın kimde olduğu yalnızca üst şeritteki metinden okunuyordu; tahtaya bakan oyuncu
+kendi sırası mı diye yukarı bakmak zorundaydı. Artık **sırası olmayan tarafın taşları
+soluk** çiziliyor (`opacity-40 saturate-50`, 300ms geçişle).
+
+Hesap `Board`'da yapılıyor (`square.owner !== currentPlayer`), `Square` üzerinden `Piece`'e
+`dimmed` olarak iniyor. `currentPlayer` null iken (oyun sonu) hiçbir şey solmuyor.
+
+**Bilgi sızıntısı yok:** kapalı taşın sırtı da aynı oranda soluyor, yani solukluk yalnızca
+sahiplik bilgisini kullanıyor — o bilgi zaten tahtada görünüyordu.
+
+### Dizilim süresi: 180 sn, dolunca kalan taşlar rastgele diziliyor
+
+Dizilim aşamasının **hiç süresi yoktu**: rakip taşlarını dizmezse oyun sonsuza kadar
+bekliyordu, oyuncunun elinde odadan çıkmaktan başka seçenek yoktu.
+
+Artık ikinci oyuncu katılıp faz `SETUP`'a çekildiği an sunucuda bir saat kuruluyor
+(`setupDeadline`). Süre dolunca `alarm()` hazır olmayan oyuncunun taşlarını **rastgele
+dizip** hazır sayıyor ve oyun başlıyor.
+
+- **Süre herkes için sabit 180 sn** (`SETUP_SURESI_MS`), tur süresi gibi presete bağlı
+  değil. Bağlanamazdı da: saat ikinci oyuncu katıldığı an başlamak zorunda, oda
+  kurucusunun menüden seçtiği değer ise ancak "Hazır"a basınca sunucuya ulaşıyor — yani
+  her zaman geç kalıyordu. Ayarlar penceresindeki preset satırı da bu yüzden artık
+  yalnızca tur süresini yazıyor.
+- Geri sayım **dizilim panelinde**, eskiden `0 / 40` yazan rozetin yerinde. Kaç taş
+  kaldığını havuz listesi ve "Hazır" düğmesinin kilidi zaten söylüyordu; sürenin dolmak
+  üzere olduğunu ise hiçbir şey söylemiyordu. Son 30 sn kehribar, son 10 sn kırmızı ve
+  yanıp sönüyor.
+- Sunucu **kalan süreyi** yolluyor (`setupRemainingMs`), mutlak son tarihi değil: tur
+  saatinde olduğu gibi, istemcinin sistem saati kayıksa mutlak damga dakikalarca yanlış
+  sayardı.
+- Taşları sunucu dizdiyse oyuncuya söyleniyor: "Dizilim süresi doldu — kalan taşların
+  rastgele dizildi." Ölçüt "Hazır dedim mi", yani hepsini dizip düğmeye basmamış oyuncu da
+  uyarıyı görüyor (onun dizilimi de sunucununkiyle değişiyor).
+- Rastgele dizilimde karıştırma **Fisher-Yates**. `sort(() => Math.random() - 0.5)`
+  yetmiyordu: karşılaştırma tutarsız olduğu için dağılım düzgün değil ve dizinin başı
+  yerinde kalmaya meyilli — bu, rastgele dizilen oyuncunun **Bayrak konumunu sistematik
+  olarak tahmin edilebilir** yapardı.
+
+**Yan düzeltme — geç gelen `setup_complete` oyunu başa sarıyordu.** Alarm oyuncuyu dizip
+fazı `PLAY`'e çektikten sonra o oyuncudan bir `setup_complete` gelirse (tam o anda "Hazır"a
+basmış ya da kopan bağlantının kuyruğu boşalmış olabilir) sunucu bunu koşulsuz işliyordu:
+taşlar eksik listeyle eziliyor, iki taraf da hazır göründüğü için blok yeniden çalışıyor,
+`turnStartedAt` sıfırlanıyor ve `both_setup_complete` yeniden yayınlanarak **süren oyunun
+tahtası başa sarıyordu**. Tek satırlık faz koruması eklendi.
+
+### Oynayacak taşı kalmayan oyuncu kaybeder
+
+Bildirilen belirti: "tüm adamlar öldü, 4 bomba ve bayrak kaldı, oyun bitmedi."
+
+Doğru: Bomba ve Bayrak `movable: false`. Elinde yalnızca onlar kalan oyuncu bir daha hamle
+yapamıyor ama oyun sonu koşulu **yalnızca bayrağın düşmesine** bakıyordu, dolayısıyla masa
+açık kalıyor ve tur saati boş yere dönüyordu.
+
+Artık her çarpışmadan sonra **iki taraf için de** "oynayabileceği bir hamle var mı" diye
+bakılıyor (`hamlesiVarMi`). Kural iki kilitlenmeyi birden kapatıyor:
+
+1. hareket edebilen taşı kalmadı (yalnız Bomba/Bayrak),
+2. taşları var ama hepsi kendi taşları/göller/kenarlarla çevrili — gidecek kare yok.
+
+Oynayamayan taraf kaybeder; **ikisi birden** oynayamıyorsa oyun berabere biter. Yeni gerekçe
+`NO_MOVES` olarak iki tarafa da gidiyor.
+
+İstemcide beraberliğin ölçütü de değişti: eskiden `reason === 'TIMEOUT_DRAW'` idi, artık
+**kazanan yokluğu**. Sebebe bakan eski koşulda `NO_MOVES` beraberliğinde oyun sonu kapağı
+hiç açılmıyordu (`GameOverModal`, `!winner && !isDraw` dalı).
+
+### "Odadan Çık" ile bağlantı kopması ayrıldı
+
+Bildirilen belirti: "oyuncu odayı terk ettiğinde karşı tarafa bağlantı koptu hatası veriyor."
+
+Sebep: istemci ayrılırken yalnızca WebSocket'i kapatıyordu, sunucunun elinde de tek sinyal
+olarak `webSocketClose` vardı. İkisi ayırt edilemediği için kasten çıkan oyuncu "koptu"
+sayılıyor, rakip **60 saniye boyunca dönmeyecek birini** bekliyordu.
+
+Artık istemci kapatmadan önce `leave_room` yolluyor:
+
+| Faz | Ne oluyor |
+|---|---|
+| Oyun sürüyor | Oyun **anında** biter, kalan oyuncu hükmen kazanır, gerekçe `OPPONENT_QUIT` ("Rakip odadan ayrıldı — hükmen kazandın.") |
+| Lobi / dizilim | Slot boşalır, oda `LOBBY`'ye döner, kalan oyuncu yeni rakip bekler |
+
+Ayrılan oyuncunun kaydı oyun sonu ekranı için duruyor ama `left` ile işaretleniyor:
+işaretlenmeseydi hemen ardından gelen soket kapanması yine kopma sayılır ve tam da
+kaldırmak istediğimiz bildirim geri gelirdi. Dizilimde ayrılmada `setupDeadline` de
+temizleniyor — yoksa alarm, odada **tek başına kalan** oyuncuyu rastgele dizerdi.
+
+### Hareket yönü serbest bırakıldı
+
+Taşlar tek kare ve düz gitmeye devam ediyor (çapraz hâlâ yasak), ama **ileri, geri, sağa ve
+sola** serbestçe. Kaldırılan kural sunucuda iki satırdı (`BACKWARD`); istemcide de geçerli
+hamle üretimi yöne göre üç yön döndürüyordu, dört yöne çıkarıldı — ikisi ayrı yerlerde
+olduğu için tek başına biri değiştirilirse tahtada görünen işaretler sunucunun kabul
+ettiğinden farklı olurdu.
+
+Dört dildeki kural metni ve artık hiç gönderilmeyen `errBACKWARD` çeviri anahtarı da
+temizlendi.
+
 ## Higgsfield sürümünden ayrılan noktalar
 
 - TanStack SSR sarmalayıcısı (`error-capture` / `error-page` / `server-entry`) kaldırıldı.
@@ -1496,7 +1596,7 @@ sadece değerler geçersiz.
 - sıra dışı hamle reddediliyor
 - hareket edemeyen taş (Bayrak/Bomba) reddediliyor
 - **yana hareket kabul ediliyor** (Higgsfield sürümünde bloke idi)
-- geri hareket reddediliyor
+- **geri hareket de kabul ediliyor** (yön sınırlaması kaldırıldı)
 - oda verisi DO depolamasında kalıcı (sunucu yeniden başlasa da oda duruyor)
 
 `node test/carpisma-testi.mjs` çarpışma kurallarını ve **bilgi sızıntısını** ölçer (34 kontrol,
@@ -1521,6 +1621,25 @@ sessizce sızdırır:
 
 Orman senaryolarının açık alan kontrol grubu olması şart: yoksa gelen `null`, kural işlediği
 için mi yoksa alan hiç doldurulmadığı için mi boş, ayırt edilemezdi.
+
+`node test/dizilim-saati-testi.mjs` dizilim saatini ölçer. Süre normalde 180 sn; test 3 dakika
+bekleyemeyeceği için odayı **kuran** bağlantı `?setupMs=` ile süreyi kısaltıyor (aynı gerekçe
+`?seed=` için de geçerli, ikisi de yalnızca testlerde kullanılıyor):
+
+- süre dolunca hazır olmayan oyuncunun tahtasında **40 taş** oluşuyor ve faz `PLAY_RED`
+- hazır olan oyuncunun kendi dizilimine dokunulmuyor
+- `roomState` kalan süreyi taşıyor (`setupRemainingMs`)
+- **süre dolduktan sonra gelen `setup_complete` oyunu başa sarmıyor** ve oyun kaldığı
+  yerden sürüyor
+
+`node test/serbest-hamle-testi.mjs`: iki taraf da geri adım atabiliyor, yan hareket duruyor,
+çapraz hâlâ `STRAIGHT_ONLY` ile reddediliyor; son hareketli taşını yitiren tarafta oyun
+`NO_MOVES` ile bitiyor ve sonuç iki tarafa da aynı gidiyor.
+
+`node test/oda-terk-testi.mjs`: oyun sürerken `leave_room` gelince rakip **~110 ms** içinde
+`game_over reason=OPPONENT_QUIT` alıyor (60 sn kopma penceresi beklenmiyor) ve hiçbir
+"bağlantı koptu" bildirimi gitmiyor; dizilimde ayrılmada slot boşalıyor, oda `LOBBY`'ye
+dönüyor ve dizilim saati duruyor.
 
 Ayarlar panosu tarayıcıda elle doğrulandı:
 
