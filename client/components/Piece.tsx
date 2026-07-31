@@ -8,11 +8,16 @@ interface PieceProps {
     isOpponent: boolean;
     onDragStart?: (e: React.DragEvent) => void;
     lang?: Language;
+    // Sirasi OLMAYAN oyuncunun taslari soluk (alfa) cizilir: oyuncu tek bakista
+    // kimin oynadigini anlar. Bilgi sizintisi yok — gizli taslar yine gizli.
+    dimmed?: boolean;
 }
 
-const Piece: React.FC<PieceProps> = ({ piece, isOpponent, onDragStart, lang = 'TR' }) => {
+const Piece: React.FC<PieceProps> = ({ piece, isOpponent, onDragStart, lang = 'TR', dimmed = false }) => {
     const label = getPieceLabel(piece.name, lang);
     const showBack = isOpponent && !piece.revealed;
+
+    const dimStyle = `transition-opacity duration-300 ${dimmed ? 'opacity-40 saturate-50' : ''}`;
 
     const isRed = piece.owner === PLAYERS.RED;
     
@@ -24,7 +29,7 @@ const Piece: React.FC<PieceProps> = ({ piece, isOpponent, onDragStart, lang = 'T
 
     if (showBack) {
         return (
-            <div className="relative w-full h-full flex items-center justify-center p-0.5 group z-10 hover:z-[999]">
+            <div className={`relative w-full h-full flex items-center justify-center p-0.5 group z-10 hover:z-[999] ${dimStyle}`}>
                 <div className={`w-full h-full rounded-md ${isRed ? 'bg-slate-900 border-red-700' : 'bg-slate-900 border-blue-700'} border-2 flex items-center justify-center shadow-md relative overflow-hidden transition-all duration-200 transform group-hover:scale-200 group-hover:shadow-2xl`}>
                     <Shield className={`w-5 h-5 ${isRed ? 'text-red-500' : 'text-blue-500'} opacity-80`} />
                 </div>
@@ -34,10 +39,13 @@ const Piece: React.FC<PieceProps> = ({ piece, isOpponent, onDragStart, lang = 'T
     
     return (
         <div 
-            className="relative w-full h-full flex items-center justify-center p-0.5 group z-10 hover:z-[999]"
+            className={`relative w-full h-full flex items-center justify-center p-0.5 group z-10 hover:z-[999] ${dimStyle}`}
             draggable={canDrag}
             onDragStart={canDrag ? onDragStart : undefined}
         >
+            {/* Izci hakki bekleme sayaci: scoutIn = hakkin yenilenmesine kalan tur.
+                Yalnizca KENDI Izcilerimizde gelir (server sadece isOwn+SCOUT'a
+                gonderiyor), hazir olunca (0) kaybolur. Taşin icinde, ismin ustunde. */}
             <div 
                 className={`w-full h-full rounded-md ${teamStyle} border-2 flex flex-col items-center justify-center p-1 shadow-lg cursor-grab active:cursor-grabbing transition-transform duration-200 transform group-hover:scale-200 group-hover:shadow-2xl group-hover:ring-2 group-hover:ring-amber-300 relative overflow-hidden select-none`}
             >
@@ -53,8 +61,12 @@ const Piece: React.FC<PieceProps> = ({ piece, isOpponent, onDragStart, lang = 'T
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center w-full px-0.5">
-                        <span className="text-sm font-black leading-none drop-shadow-sm">{piece.rank}</span>
-                        <span className="text-[9px] font-bold leading-tight truncate w-full text-center mt-0.5 opacity-90">
+                        {typeof piece.scoutIn === 'number' && piece.scoutIn > 0 && (
+                            <span className="text-sm font-black leading-none text-amber-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]">
+                                {piece.scoutIn}
+                            </span>
+                        )}
+                        <span className="text-[9px] font-bold leading-tight truncate w-full text-center opacity-90">
                             {label}
                         </span>
                     </div>

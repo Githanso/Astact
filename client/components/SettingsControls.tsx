@@ -48,7 +48,9 @@ export const TimerPresetPicker: React.FC<TimerPresetPickerProps> = ({ timerPrese
                             }`}
                         >
                             <div>{preset === 'FAST' ? t.timerPresetFast : preset === 'NORMAL' ? t.timerPresetNormal : t.timerPresetLong}</div>
-                            <div className="text-[9px] opacity-80">{config.turnTime}s / {config.setupTime}s</div>
+                            {/* Yalnizca TUR suresi yaziyor. Dizilim suresi presete bagli
+                                degil (herkes icin sabit), burada gostermek yanlis bilgi olurdu. */}
+                            <div className="text-[9px] opacity-80">{config.turnTime}{t.seconds}</div>
                         </button>
                     );
                 })}

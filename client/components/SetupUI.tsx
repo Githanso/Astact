@@ -1,7 +1,7 @@
 import React from 'react';
 import { PieceDefinition, Player, Language } from '../types';
 import { PLAYERS, TRANSLATIONS, getPieceLabel } from '../constants';
-import { Shuffle, Trash2, CheckCircle2 } from 'lucide-react';
+import { Shuffle, Trash2, CheckCircle2, Hourglass } from 'lucide-react';
 
 interface SetupUIProps {
     piecesToPlace: PieceDefinition[];
@@ -11,8 +11,15 @@ interface SetupUIProps {
     onAutoSetup: () => void;
     onClearSetup: () => void;
     player: Player;
+    // Oyuncu online modda ad girmisse adi, girmemisse null/boş. Başlıkta
+    // "Kırmızı Oyuncu - Dizilim" yerine girilen ad gosterilir.
+    playerName?: string | null;
     lang: Language;
     isWaitingOpponent?: boolean;
+    // Dizilim icin kalan sure (saniye). null = saat islemiyor (yerel oyun,
+    // rakip henuz katilmadi) ve sayac hic basilmaz. Sure dolunca sunucu kalan
+    // taslari rastgele diziyor, o yuzden bu geri sayim SUSTURULMAMALI.
+    remainingSec?: number | null;
 }
 
 const SetupUI: React.FC<SetupUIProps> = ({ 
@@ -23,24 +30,41 @@ const SetupUI: React.FC<SetupUIProps> = ({
     onAutoSetup, 
     onClearSetup, 
     player,
+    playerName = null,
     lang,
-    isWaitingOpponent = false
+    isWaitingOpponent = false,
+    remainingSec = null
 }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
     const isRed = player === PLAYERS.RED;
-    const playerLabel = isRed ? t.playerRed : t.playerBlue;
+    const playerLabel = isRed ? t.playerRedColor : t.playerBlueColor;
     const playerColor = isRed ? 'text-amber-400' : 'text-sky-300';
     const hasPiecesToPlace = piecesToPlace.length > 0;
-    const totalRemaining = piecesToPlace.reduce((acc, p) => acc + p.count, 0);
+
+    // Geri sayim, eskiden burada duran "0 / 40" rozetinin YERINE geciyor: kac tas
+    // kaldigini havuz listesi ve "Hazir" dugmesinin kilidi zaten soyluyordu, oysa
+    // surenin dolmak uzere oldugunu hicbir sey soylemiyordu.
+    const geriSayim = remainingSec === null ? null
+        : `${Math.floor(Math.max(0, remainingSec) / 60)}:${String(Math.max(0, remainingSec) % 60).padStart(2, '0')}`;
+    const geriSayimRengi = remainingSec === null ? ''
+        : remainingSec <= 10 ? 'bg-rose-950/80 border-rose-500 text-rose-200 animate-pulse'
+        : remainingSec <= 30 ? 'bg-amber-950/80 border-amber-500/70 text-amber-200'
+        : 'bg-slate-800 border-slate-700 text-slate-200';
 
     return (
         <div className="w-full lg:w-72 bg-slate-900/90 border border-slate-800 p-4 rounded-xl shadow-2xl flex-shrink-0 flex flex-col justify-between">
             <div>
                 <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
-                    <h2 className={`text-lg font-black tracking-wide ${playerColor}`}>{playerLabel} - {t.setupPanelSuffix}</h2>
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-                        {40 - totalRemaining} / 40
-                    </span>
+                    <h2 className={`text-lg font-black tracking-wide ${playerColor}`}>{playerName?.trim() || playerLabel}</h2>
+                    {geriSayim !== null && (
+                        <span
+                            title={t.setupTimer}
+                            className={`flex items-center gap-1.5 text-lg font-black font-mono px-2.5 py-1 rounded-lg border tabular-nums ${geriSayimRengi}`}
+                        >
+                            <Hourglass className="w-4 h-4" />
+                            {geriSayim}
+                        </span>
+                    )}
                 </div>
 
                 {hasPiecesToPlace ? (

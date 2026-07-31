@@ -75,6 +75,9 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highl
                         const isMove = validMoves.some(m => m.row === rowIndex && m.col === colIndex);
                         const isSelected = highlightedPiece?.position.row === rowIndex && highlightedPiece?.position.col === colIndex;
                         const forestMatch = forests.find(f => f.row === rowIndex && f.col === colIndex);
+                        // Sirasi OLMAYAN oyuncunun taslari soluk cizilir. currentPlayer null
+                        // ise (menu/oyun sonu) dim yok; mevcut davranis korunur.
+                        const isDimmed = !!(currentPlayer && square && typeof square === 'object' && square.owner !== currentPlayer);
                         
                         return (
                             <Square
@@ -93,6 +96,7 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highl
                                 isScoutTarget={scoutTargets.some(t => t.row === rowIndex && t.col === colIndex)}
                                 isForest={!!forestMatch}
                                 forestDensity={forestMatch?.density || 2}
+                                isDimmed={isDimmed}
                             />
                         );
                     })

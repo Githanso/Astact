@@ -10,9 +10,10 @@ export type Language = 'TR' | 'EN' | 'JA' | 'KO';
 
 export type TimerPreset = 'FAST' | 'NORMAL' | 'LONG';
 
+// Dizilim suresi BURADA YOK: presete bagli degil, herkes icin sabit
+// (bkz. constants.ts DIZILIM_SURESI_SN ve server.ts SETUP_SURESI_MS).
 export interface TimerConfig {
   turnTime: number;      // seconds per turn
-  setupTime: number;     // seconds for setup
   disconnectTime: number; // seconds for disconnect timeout
 }
 
@@ -65,7 +66,10 @@ export type OnlineStatus =
 
 // Oyunun neden bittigi (sunucudaki GameOverReason ile ayni). Ekrandaki metin buna
 // gore secilir: bayrakla kazanmak ile rakip ayrildigi icin kazanmak ayni sey degil.
-export type GameOverReason = 'FLAG' | 'TIMEOUT_DRAW' | 'OPPONENT_LEFT' | null;
+//   OPPONENT_LEFT : rakibin baglantisi koptu ve geri donmedi
+//   OPPONENT_QUIT : rakip "Odadan Cik" dedi — kasitli ayrilma
+//   NO_MOVES      : bir tarafin oynayacak tasi kalmadi (iki taraf da ise berabere)
+export type GameOverReason = 'FLAG' | 'TIMEOUT_DRAW' | 'OPPONENT_LEFT' | 'OPPONENT_QUIT' | 'NO_MOVES' | null;
 
 // Baglanti seridinin hali. 'OPPONENT_GONE' / 'SELF_GONE' geri sayim gosterir,
 // '*_BACK' kisa sureli "geri dondu" bildirimidir.
@@ -82,6 +86,12 @@ export interface RoomState {
   // Kopan oyuncunun donmesi icin kalan sure (ms); bagliysa null.
   redDisconnectMs?: number | null; blueDisconnectMs?: number | null;
   disconnectTimeoutMs?: number;
+  // Dizilim saati: sunucu SETUP fazina giris aninda kurar, sure dolunca hazir
+  // olmayan oyuncu rastgele dizilip hazir sayilir. null = saat islemiyor.
+  // MUTLAK son tarih degil KALAN sure geliyor: istemcinin sistem saati kayik
+  // olabilir, mutlak damga dakikalarca yanlis sayardi (tur saatiyle ayni desen).
+  setupTimeMs?: number;
+  setupRemainingMs?: number | null;
 }
 
 export type TerrainType = 'LAKE' | 'FOREST' | null;

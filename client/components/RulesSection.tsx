@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Language } from '../types';
 import {
     PIECE_DEFINITIONS, PIECE_COUNTS, TRANSLATIONS, getPieceLabel,
-    SCOUT_COOLDOWN, MAX_MISSED_TURNS,
+    SCOUT_COOLDOWN, MAX_MISSED_TURNS, DIZILIM_SURESI_SN,
 } from '../constants';
 import { ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react';
 
@@ -38,7 +38,9 @@ export const RulesSection: React.FC<RulesSectionProps> = ({ lang }) => {
         t.ruleLake,
         t.ruleForest,
         t.ruleFlag,
+        t.ruleNoMoves,
         t.ruleTimeout.replace('{n}', String(MAX_MISSED_TURNS)),
+        t.ruleSetupTime.replace('{n}', String(DIZILIM_SURESI_SN)),
     ];
 
     return (

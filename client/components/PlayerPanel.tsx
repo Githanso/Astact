@@ -1,23 +1,18 @@
 import React, { useState } from 'react';
 import { CombatResult, SpecialAbility, Language } from '../types';
 import { PLAYERS, TRANSLATIONS, getPieceLabel, MAX_MISSED_TURNS } from '../constants';
-import { ChevronLeft, ChevronRight, Swords, Info } from 'lucide-react';
+import { Swords, Info, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { MuteToggle } from './SettingsControls';
 
-// Carpisma gecmisi cekmecesi: PENCERENIN sag kenarina yapisik, tahtanin ustune
-// binen bir panel. Eskiden sabit genislikte bir sutundu ve tahta o genisligi hep
-// kaybediyordu; artik yer ayirmiyor, tahta bosalan alani aliyor.
-//
-// `fixed` (main'e gore absolute degil): main max-w-7xl ile sinirli ve ortalanmis,
-// yani genis ekranda sagda 300px+ bosluk kaliyor — cekmece oraya degil PENCERE
-// kenarina yapismali. Dikey konum --baslik-h'ten geliyor, boylece baslik
-// yuksekligi degisince cekmece de kayiyor.
-//
-// Geriye tek is kaldi: carpisma gecmisi (yerel modda ayrica kacirilan tur kutusu).
-// Panodan cikarilanlar ve nedenleri asagida, govdedeki yorumda.
+// Carpisma gecmisi cekmecesi: PENCERENIN sag kenarina yapisik durur (fixed right-0).
+// Acildiginda 500px genisligindedir; kapaliyken sagda ince bir tutamak kalir.
 interface PlayerPanelProps {
     combatHistory: CombatResult[];
     missedTurns: { red: number; blue: number };   // süresi dolduğu için kaçırılan tur
     isOnlineMode: boolean;   // online modda kaçırma kuralı işlemiyor, kutu gizlenir
+    gecenSure: number;       // oyun basindan beri gecen sure (saniye)
+    volume: number;          // ses duzeyi (0-1) — MuteToggle'in durumu
+    onVolumeChange: (v: number) => void;
     lang: Language;
 }
 
@@ -60,20 +55,25 @@ const CombatHistoryItem: React.FC<{ result: CombatResult; lang: Language }> = ({
             winnerText = fill(t.combatFlagCaptured);
             break;
         case 'DEFENDER_WINS':
-            winnerText = defender.name === 'Bomba' ? fill(t.combatBombHit) : fill(t.combatDefenderWins);
+            if (defender.name === 'Bomba') { winnerText = fill(t.combatBombHit); }
+            else if (defender.special === SpecialAbility.SPY && attacker.rank === 10) { winnerText = t.combatSpy; }
+            else { winnerText = fill(t.combatDefenderWins); }
             break;
         case 'EQUAL_RANK':
         case 'BOTH_LOSE':
-            winnerText = fill(t.combatEqualRank);
+            if (defender.name === 'Bomba') { winnerText = fill(t.combatBombHit); }
+            else { winnerText = fill(t.combatEqualRank); }
             break;
     }
 
     return (
         <div className="p-2.5 bg-slate-800/90 border border-slate-700/80 rounded-lg text-xs leading-relaxed shadow-sm">
-            <div className="font-semibold flex items-center justify-between gap-1 mb-1 border-b border-slate-700/60 pb-1">
+            <div className="font-semibold flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-700/60 pb-1 mb-1">
                 <span className={`${attackerColor} font-bold`}>{ownerLabel(attacker.owner)} {aLabel}</span>
-                <Swords className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-slate-500">{rankMetni(attacker.rank)}</span>
+                <Swords className="w-3.5 h-3.5 text-amber-400 mx-0.5" />
                 <span className={`${defenderColor} font-bold`}>{ownerLabel(defender.owner)} {dLabel}</span>
+                <span className="text-slate-500">{rankMetni(defender.rank)}</span>
             </div>
             <p className="font-medium text-amber-200">{winnerText}</p>
         </div>
@@ -84,15 +84,26 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
     combatHistory,
     missedTurns,
     isOnlineMode,
+    gecenSure,
+    volume,
+    onVolumeChange,
     lang,
 }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
-    // Oyun bilgisi panosu sayfa açıldığında KAPALI başlar.
+    // Cekmece VARSAYILAN KAPALI baslar: acikken tahtanin ustune bindigi icin
+    // oyuncu her acilista once kapatmak zorunda kalmasin.
     const [isOpen, setIsOpen] = useState(false);
 
-    // KAPALI: yalnizca sag kenarda ince bir tutamak duruyor. Cekmece acikken
-    // tahtanin ustune bindigi icin kapali baslamak sart — aksi halde oyuncu her
-    // acilista once onu kapatmak zorunda kalirdi.
+    // Gecen sureyi MM:SS, 60 dk gecerse H:MM:SS biciminde yaz.
+    const formatSure = (sn: number) => {
+        const s = Math.max(0, Math.floor(sn));
+        const dk = Math.floor(s / 60);
+        const ss = String(s % 60).padStart(2, '0');
+        if (dk < 60) return `${String(dk).padStart(2, '0')}:${ss}`;
+        return `${Math.floor(dk / 60)}:${String(dk % 60).padStart(2, '0')}:${ss}`;
+    };
+
+    // KAPALI: yalnizca sag kenarda ince bir tutamak duruyor.
     if (!isOpen) {
         return (
             <button
@@ -112,22 +123,37 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
     }
 
     return (
-        <div className="fixed right-0 top-[calc(var(--baslik-h,129px)_+_16px)] z-30 w-72 max-w-[85vw] bg-slate-900/95 border border-r-0 border-slate-800 rounded-l-xl shadow-2xl backdrop-blur-sm">
-            {/* Cekmece basligi. Sag ok = "kapat, saga kaysin"; kapaliyken sol ok
-                cikiyor ("ac, sola gelsin"). Yon boyle secildi cunku cekmece SAG
-                kenardan aciliyor — okun isaret ettigi yer, dugmeye basinca panelin
-                gidecegi yer. */}
-            <button
-                onClick={() => setIsOpen(false)}
-                aria-expanded={true}
-                className="w-full flex items-center justify-between gap-2 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-200 hover:bg-slate-800/60 transition-colors rounded-tl-xl border-b border-slate-800"
-            >
+        <aside className="fixed right-0 top-[calc(var(--baslik-h,129px)_+_16px)] z-30 w-[500px] max-w-[92vw] bg-slate-900/95 border border-r-0 border-slate-800 rounded-l-xl shadow-2xl backdrop-blur-sm flex flex-col overflow-hidden">
+            {/* Panel basligi. Sag ok = kapat; kapaliyken sol ok cikiyor (ac). */}
+            <div className="flex items-center justify-between gap-2 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-200 border-b border-slate-800">
                 <span className="flex items-center gap-2">
                     <Info className="w-4 h-4 text-amber-400" />
                     <span>{t.combatHistory}</span>
                 </span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-            </button>
+                <span className="flex items-center gap-1 text-amber-300 font-black text-[11px] tracking-normal" title={t.gameTime}>
+                    <Clock className="w-3.5 h-3.5" />
+                    {t.gameTime}: {formatSure(gecenSure)}
+                </span>
+                <span className="flex items-center gap-1.5">
+                    {/* Sustur / sesi ac — menu ekranindakiyle ayni tek nokta; buradan
+                        da cekmeceyi kapatmadan kontrol edilebiliyor. */}
+                    <MuteToggle
+                        volume={volume}
+                        onVolumeChange={onVolumeChange}
+                        lang={lang}
+                        className="p-1.5 rounded-lg bg-slate-800/80 border-slate-700 hover:bg-slate-700 text-slate-400"
+                        iconClassName="w-3.5 h-3.5"
+                    />
+                    <button
+                        onClick={() => setIsOpen(false)}
+                        aria-expanded={true}
+                        className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                        <span className="text-[10px] font-normal">({combatHistory.length})</span>
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                </span>
+            </div>
 
             <div className="p-4 flex flex-col space-y-4">
             {/* Panodan CIKARILANLAR ve nedenleri:
@@ -135,9 +161,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
                   - rutbe hiyerarsisi          -> menudeki Ayarlar penceresinde,
                   - galibiyet sayaci           -> kaldirildi (gerek gorulmedi),
                   - ele gecirilenler           -> kaldirildi; hangi tastan kac kaldigi
-                    zaten tasa tiklayinca tahtanin ustunde tur bazinda cikiyor.
-                Pano varsayilan KAPALI basladigi icin buradaki kopyalar zaten cogu
-                zaman hic okunmuyordu. */}
+                    zaten tasa tiklayinca tahtanin ustunde tur bazinda cikiyor. */}
 
             {/* Kaçırılan tur — ikisi de sınıra ulaşınca oyun berabere biter.
                 Online modda kural işlemediği için kutu hiç gösterilmiyor. */}
@@ -155,16 +179,10 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
                 </div>
             )}
 
-            {/* Rutbe hiyerarsisi buradan KALDIRILDI: ayni icerik menudeki Ayarlar
-                penceresinde, daha eksiksiz haliyle duruyor (RulesSection — adetler,
-                ozel taslar ve dokuz kural maddesi). Oyun ortasinda ikinci bir kopya
-                tutmak hem yer harciyor hem de ikisinin ayrisma riskini doguruyordu. */}
-
-            {/* Carpisma gecmisi. Basligi cekmecenin kendi basligi tasiyor, burada
+            {/* Carpisma gecmisi. Basligi panelin kendi basligi tasiyor, burada
                 tekrarlanmiyor — yalnizca sayac kaldi. */}
             <div className="flex-1 flex flex-col min-h-0">
-                <div className="text-[10px] text-slate-400 font-normal text-right mb-1">({combatHistory.length})</div>
-                <div className="h-44 overflow-y-auto bg-slate-800/80 rounded-xl p-2 space-y-2 text-xs border border-slate-700 custom-scrollbar">
+                <div className="h-72 overflow-y-auto bg-slate-800/80 rounded-xl p-2 space-y-2 text-xs border border-slate-700 custom-scrollbar">
                     {combatHistory.length === 0 ? (
                         <p className="text-slate-500 italic text-center py-6">{t.noCombatYet}</p>
                     ) : (
@@ -175,7 +193,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
                 </div>
             </div>
         </div>
-        </div>
+        </aside>
     );
 };
 

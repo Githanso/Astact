@@ -26,6 +26,8 @@ interface SquareProps {
     // Secili Izci bu dusman tasini gorebilir. Hamle isaretinden AYRI renk: tiklama
     // sonucu farkli (tas alinmaz, kimligi acilir) ve karisirsa oyuncu tur harcar.
     isScoutTarget?: boolean;
+    // Sirasi olmayan oyuncunun tasi: soluk (alfa) cizilir. Board hesaplar.
+    isDimmed?: boolean;
 }
 
 const Square: React.FC<SquareProps> = ({ 
@@ -42,7 +44,8 @@ const Square: React.FC<SquareProps> = ({
     lang,
     isCombatSquare = false,
     rippleOwner = null,
-    isScoutTarget = false
+    isScoutTarget = false,
+    isDimmed = false
 }) => {
     let content = null;
     const activeViewPlayer = perspectivePlayer || currentPlayer;
@@ -73,13 +76,13 @@ const Square: React.FC<SquareProps> = ({
     if (squareData === 'LAKE') {
         content = <LakeOverlay />;
     } else if (squareData === 'FOREST') {
-        content = <ForestOverlay density={forestDensity} />;
+        content = <ForestOverlay />;
     } else if (squareData) {
         content = (
             <div className="relative w-full h-full">
                 {isForest && (
                     <div className="absolute inset-0 z-0 opacity-40">
-                        <ForestOverlay density={1} />
+                        <ForestOverlay />
                     </div>
                 )}
                 <div className="relative z-10 w-full h-full">
@@ -88,24 +91,38 @@ const Square: React.FC<SquareProps> = ({
                         piece={squareData}
                         isOpponent={squareData.owner !== activeViewPlayer}
                         onDragStart={handleDragStart}
+                        dimmed={isDimmed}
                     />
                 </div>
             </div>
         );
     } else if (isForest) {
-        content = <ForestOverlay density={forestDensity} />;
+        content = <ForestOverlay />;
     }
 
     const isLightGrid = (coords.row + coords.col) % 2 === 0;
-    const bgTileStyle = isLightGrid ? 'bg-slate-800/80' : 'bg-slate-800/50';
 
     return (
         <div
-            className={`relative w-full h-full cursor-pointer group border border-slate-700/30 ${bgTileStyle} transition-all duration-150 select-none${isCombatSquare ? ' combat-shake' : ''}`}
+            className={`relative w-full h-full cursor-pointer group border border-slate-700/30 bg-slate-900 transition-all duration-150 select-none${isCombatSquare ? ' combat-shake' : ''}`}
             onClick={() => onClick(coords)}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
         >
+            {/* Zemin dokusu: public/assets/floor.avif. Satranc deseni karartma
+                katmaniyla korunuyor (acik kare daha aydinlik). Gol veya orman
+                kendi overlay'ini bastigi icin bu doku yalnizca bos/tasli karelerde gorunur. */}
+            <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden">
+                <img src="/assets/floor.avif" alt="" draggable={false} className="w-full h-full object-cover" />
+                <div className={`absolute inset-0 ${isLightGrid ? 'bg-slate-800/35' : 'bg-slate-800/60'}`} />
+            </div>
+            {/* Base Content */}
+            <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                {content}
+            </div>            <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden">
+                <img src="/assets/floor.avif" alt="" draggable={false} className="w-full h-full object-cover" />
+                <div className={`absolute inset-0 ${isLightGrid ? 'bg-slate-800/35' : 'bg-slate-800/60'}`} />
+            </div>
             {/* Base Content */}
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                 {content}
