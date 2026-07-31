@@ -5,6 +5,8 @@ dist/
 .wrangler-dev.log
 
 # Derleme ciktisi: `npm run build:client` uretir, her derlemede hash'i degisir.
-# public/ icindeki logo.svg, favicon.svg ve game_music.mp3 KAYNAK varlik, repoda kalir.
+# public/ icindeki logo.svg, favicon.svg, game_music.mp3 ve assets/*.avif
+# KAYNAK varliktir, repoda kalir.
 public/index.html
-public/assets/
+public/assets/index-*.js
+public/assets/index-*.css
