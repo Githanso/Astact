@@ -244,12 +244,16 @@ const App: React.FC = () => {
             // Oda kurucusu kendi preset'ini HEMEN bildirmeli. Yukarıdaki senkron satırı
             // bu mesajla gelen sunucu VARSAYILANINI (35sn) uygulayıp kurucunun menüden
             // seçtiği süreyi eziyordu; kurucu 15sn seçmişken oyun 35sn ile başlıyordu.
-            // Kod popup'inin ARKASINDA lobi durmali, dizilim alani DEGIL. handleCreateOnlineRoom
-            // lobiyi kapatiyor; burada geri aciyoruz, yoksa arkada rakip daha gelmemisken
-            // taş havuzu ve "Rastgele Diz/Onayla" dugmeleri hayal meyal goruntuleniyordu —
-            // oysa o asamada dizilecek bir sey yok. Rakip katilinca room_started_setup
-            // ikisini birden kapatip gercek dizilime geciriyor.
-            case 'room_created': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); setIsOnlineModalOpen(true); setShowRoomCode(true); sendWsMessage({ type: 'set_turn_time', turnTime: timerConfigRef.current.turnTime }); break;
+            // Rakip beklenirken OYUN EKRANI HIC ACILMAZ: ekran MENU'de kalir, uzerinde
+            // lobi (OnlineModal), onun da uzerinde kod popup'i durur. Eskiden burada
+            // setScreen('GAME') vardi; perdeler animate-fade-in ile 250ms'de acildigi
+            // icin oda her kuruldugunda once tahta+dizilim panosu bir an gorunup
+            // kayboluyordu. Ekrani hic GAME'e cekmeyince gosterilecek tahta da olmuyor.
+            // GAME'e gecisi tek bir yer yapiyor: room_started_setup (rakip katildiginda).
+            // MENU'ye cekmek ATLANAMAZ, sadece setScreen'i kaldirmak yetmez: oyun
+            // ekranindayken bagi kopup bos lobiye geri baglanan oyuncuda ekran GAME'de
+            // kalir ve tahta yine lobinin arkasinda gorunurdu.
+            case 'room_created': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('MENU'); setIsOnlineModalOpen(true); setShowRoomCode(true); sendWsMessage({ type: 'set_turn_time', turnTime: timerConfigRef.current.turnTime }); break;
             case 'room_joined': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); if (msg.roomState?.gamePhase === 'SETUP') { setIsOnlineModalOpen(false); setGamePhase(msg.playerTeam === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); } break;
             // Oda dolu / oyun devam ediyor gibi KALICI redler: yeniden baglanmayi
             // burada durduruyoruz, yoksa istemci 2sn'de bir bosuna deneyip durur.
@@ -383,6 +387,11 @@ const App: React.FC = () => {
                 if (gelenFaz === 'LOBBY') {
                     setWinner(null); setGameOverReason(null); setIsDraw(false); setRestartNotice(null);
                     setSetupTimeRemaining(null); setConnectionNotice(null); setConnectionSec(null);
+                    // Oda kurulusundaki ile ayni kural: lobide beklerken arkada oyun
+                    // ekrani DURMAZ. Burada da MENU'ye donuyoruz, yoksa kalan oyuncu
+                    // lobinin arkasinda yarim kalmis dizilim tahtasini gormeye devam
+                    // ediyordu. Yeni rakip katilinca room_started_setup GAME'e geciriyor.
+                    setScreen('MENU');
                     setIsOnlineModalOpen(true);
                     break;
                 }
@@ -917,6 +926,11 @@ const App: React.FC = () => {
             <MenuScreen lang={lang} onLanguageChange={setLang} onOpenOnline={() => setIsOnlineModalOpen(true)} onOpenSettings={() => setIsMenuSettingsOpen(true)} volume={volume} onVolumeChange={handleVolumeChange} />
             <MenuSettingsModal isOpen={isMenuSettingsOpen} onClose={() => setIsMenuSettingsOpen(false)} timerPreset={timerPreset} onPresetChange={handlePresetChange} lang={lang} />
             <OnlineModal isOpen={isOnlineModalOpen} onClose={() => setIsOnlineModalOpen(false)} roomCode={roomCode} playerTeam={myOnlineTeam} roomState={roomState} onCreateRoom={handleCreateOnlineRoom} onJoinRoom={handleJoinOnlineRoom} onLeaveRoom={handleLeaveOnlineRoom} errorMessage={onlineErrorMessage} lang={lang} />
+            {/* Oda kurulunca rakip beklenirken ekran MENU'de kaliyor (bkz. room_created),
+                bu yuzden kod popup'i BURADA da basilmali. Yalnizca oyun ekrani dalinda
+                dururken menude kalan kurucuda hic gorunmuyordu. Lobinin uzerinde durur:
+                ikisi de fixed inset-0 z-[1000] ve bu, DOM'da OnlineModal'dan sonra. */}
+            <RoomCodeModal isOpen={showRoomCode} roomCode={roomCode} lang={lang} />
         </>);
     }
 
@@ -958,13 +972,7 @@ const App: React.FC = () => {
                         lang={lang}
                     />
                 )}
-                {/* showRoomCode aciksa dizilim panosu CIZILMEZ. Rakip henuz odaya
-                    girmediginden dizilecek bir sey yok, ustelik kod popup'i ile lobi
-                    perdesi 250ms'de aciliyor (animate-fade-in) — perde saydamken pano
-                    altta TAM PARLAKLIKTA goruluyor ve oda her kuruldugunda ceyrek
-                    saniyelik bir sicrama olarak goze carpiyordu. Panoyu perdenin
-                    opakligiyla ortmek yerine hic basmiyoruz. */}
-                {(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && !showRoomCode && (
+                {(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && (
                     <div className={`absolute top-1/2 -translate-y-1/2 z-30 w-72 max-w-[85%] ${setupSide === 'left' ? 'left-3' : 'right-3'}`}>
                         <SetupUI piecesToPlace={piecesToPlace} selectedPieceName={selectedPieceToPlace?.name} onPieceSelect={setSelectedPieceToPlace} onAutoSetup={handleAutoSetup} onClearSetup={handleClearSetup} onFinishSetup={handleReady} isWaitingOpponent={isWaitingOpponentSetup} lang={lang} player={setupPlayer} playerName={setupPlayerName} remainingSec={isOnlineMode ? setupTimeRemaining : null} />
                     </div>
