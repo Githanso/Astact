@@ -244,7 +244,12 @@ const App: React.FC = () => {
             // Oda kurucusu kendi preset'ini HEMEN bildirmeli. Yukarıdaki senkron satırı
             // bu mesajla gelen sunucu VARSAYILANINI (35sn) uygulayıp kurucunun menüden
             // seçtiği süreyi eziyordu; kurucu 15sn seçmişken oyun 35sn ile başlıyordu.
-            case 'room_created': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); setShowRoomCode(true); sendWsMessage({ type: 'set_turn_time', turnTime: timerConfigRef.current.turnTime }); break;
+            // Kod popup'inin ARKASINDA lobi durmali, dizilim alani DEGIL. handleCreateOnlineRoom
+            // lobiyi kapatiyor; burada geri aciyoruz, yoksa arkada rakip daha gelmemisken
+            // taş havuzu ve "Rastgele Diz/Onayla" dugmeleri hayal meyal goruntuleniyordu —
+            // oysa o asamada dizilecek bir sey yok. Rakip katilinca room_started_setup
+            // ikisini birden kapatip gercek dizilime geciriyor.
+            case 'room_created': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); setIsOnlineModalOpen(true); setShowRoomCode(true); sendWsMessage({ type: 'set_turn_time', turnTime: timerConfigRef.current.turnTime }); break;
             case 'room_joined': setRoomCode(msg.roomCode); setMyOnlineTeam(msg.playerTeam); setRoomState(msg.roomState); setIsOnlineMode(true); setOnlineErrorMessage(null); setScreen('GAME'); if (msg.roomState?.gamePhase === 'SETUP') { setIsOnlineModalOpen(false); setGamePhase(msg.playerTeam === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); } break;
             // Oda dolu / oyun devam ediyor gibi KALICI redler: yeniden baglanmayi
             // burada durduruyoruz, yoksa istemci 2sn'de bir bosuna deneyip durur.
