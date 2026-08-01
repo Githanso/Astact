@@ -67,8 +67,8 @@ check(!!joined, "Oyuncu2 odaya katildi", joined ? `(takim: ${joined.playerTeam})
 // gol/orman koordinati VARSAYMIYOR: mavinin ilerleyecegi (SATIR,4) karesinin gol
 // olmadigi bir satiri arazinin kendisinden seciyor. Boylece uretici degisince
 // test kendiliginden uyum saglar.
-// r!==2 kosulu: mavi bombasi SABIT (2,3) karesinde; ileri hamle (SATIR,3)'e gidiyor,
-// SATIR=2 secilirse hedef bomba olur ve hamle reddedilir (kendi tasina saldiri).
+// r!==2 kosulu: mavi mayını SABIT (2,3) karesinde; ileri hamle (SATIR,3)'e gidiyor,
+// SATIR=2 secilirse hedef mayın olur ve hamle reddedilir (kendi tasina saldiri).
 const arazi = joined?.roomState?.terrain;
 const golMu = (r, c) => !!arazi?.lakes.some((l) => l.row === r && l.col === c);
 let SATIR = 0;
@@ -77,14 +77,14 @@ check(!!arazi, "arazi room_joined ile geldi");
 check(!golMu(SATIR, 4), `hamleler icin gol olmayan satir secildi (satir ${SATIR})`);
 
 const RED = [
-  piece("r1", "Bayrak", 0, "1. Oyuncu", 0, 10, { movable: false }),
+  piece("r1", "Sancak", 0, "1. Oyuncu", 0, 10, { movable: false }),
   piece("r2", "Mareşal", 10, "1. Oyuncu", SATIR, 7),
   piece("r3", "Er", 2, "1. Oyuncu", 3, 7),
 ];
 const BLUE = [
-  piece("b1", "Bayrak", 0, "2. Oyuncu", 0, 0, { movable: false }),
+  piece("b1", "Sancak", 0, "2. Oyuncu", 0, 0, { movable: false }),
   piece("b2", "Er", 2, "2. Oyuncu", SATIR, 3),
-  piece("b3", "Bomba", 11, "2. Oyuncu", 2, 3, { movable: false }),
+  piece("b3", "Mayın", 11, "2. Oyuncu", 2, 3, { movable: false }),
 ];
 
 console.log("\n=== 2) kurulum gonderiliyor ===");
@@ -170,11 +170,11 @@ p2.send(JSON.stringify({ type: "move", from: { row: SATIR, col: 3 }, to: { row: 
 await sleep(500);
 check(!!(await waitFor(p2, "move_error", 1500)), "sira disi hamle REDDEDILDI");
 
-// Hareket edemeyen tas (Bayrak)
+// Hareket edemeyen tas (Sancak)
 p1.send(JSON.stringify({ type: "move", from: { row: 0, col: 10 }, to: { row: 0, col: 9 } }));
 await sleep(500);
 const errs = p1.messages.filter((m) => m.type === "move_error");
-check(errs.length > 0, "Bayrak hareketi REDDEDILDI", errs.length ? `("${errs[errs.length - 1].message}")` : "");
+check(errs.length > 0, "Sancak hareketi REDDEDILDI", errs.length ? `("${errs[errs.length - 1].message}")` : "");
 
 // Yanal hareket: artik SATIR ekseninde (ilerleme eksenine dik)
 p1.messages.length = 0;

@@ -15,11 +15,11 @@ function piece(id, name, rank, owner, row, col, opts = {}) {
   return { id, name, rank, owner, special: opts.special ?? null, movable: opts.movable ?? true, position: { row, col } };
 }
 const RED = [
-  piece("r1", "Bayrak", 0, "1. Oyuncu", 0, 10, { movable: false }),
+  piece("r1", "Sancak", 0, "1. Oyuncu", 0, 10, { movable: false }),
   piece("r2", "Er", 2, "1. Oyuncu", 3, 7),
 ];
 const BLUE = [
-  piece("b1", "Bayrak", 0, "2. Oyuncu", 0, 0, { movable: false }),
+  piece("b1", "Sancak", 0, "2. Oyuncu", 0, 0, { movable: false }),
   piece("b2", "Er", 2, "2. Oyuncu", 3, 3),
 ];
 

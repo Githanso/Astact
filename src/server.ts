@@ -85,7 +85,7 @@ interface RoomData {
 //
 //   OPPONENT_LEFT : baglantisi koptu ve DISCONNECT_TIMEOUT_MS icinde donmedi
 //   OPPONENT_QUIT : "Odadan Cik" dedi — kasitli ayrilma, beklemeye gerek yok
-//   NO_MOVES      : oynayacak tasi kalmadi (yalniz Bomba/Bayrak ya da tikandi)
+//   NO_MOVES      : oynayacak tasi kalmadi (yalniz Mayın/Sancak ya da tikandi)
 type GameOverReason = "FLAG" | "TIMEOUT_DRAW" | "OPPONENT_LEFT" | "OPPONENT_QUIT" | "NO_MOVES";
 
 const BOARD_ROWS = 10, BOARD_COLS = 11;
@@ -271,25 +271,25 @@ const SUNUCU_TAS_TANIMLARI: Record<string, { rank: number; special: string | nul
   "Albay": { rank: 8, special: null, movable: true },
   "Binbaşı": { rank: 7, special: null, movable: true },
   "Yüzbaşı": { rank: 6, special: null, movable: true },
-  "Üsteğmen": { rank: 5, special: null, movable: true },
+  "Çavuş": { rank: 5, special: null, movable: true },
   "Teğmen": { rank: 4, special: null, movable: true },
-  "Astsubay": { rank: 3, special: null, movable: true },
+  "Onbaşı": { rank: 3, special: null, movable: true },
   "Er": { rank: 2, special: null, movable: true },
-  "İzci": { rank: 2, special: "SCOUT", movable: true },
+  "Keşifçi": { rank: 2, special: "SCOUT", movable: true },
   "İstihkamcı": { rank: 1, special: "MINER", movable: true },
   "Casus": { rank: 1, special: "SPY", movable: true },
-  "Bomba": { rank: 11, special: null, movable: false },
-  "Bayrak": { rank: 0, special: null, movable: false },
+  "Mayın": { rank: 11, special: null, movable: false },
+  "Sancak": { rank: 0, special: null, movable: false },
 };
 const SUNUCU_TAS_SAYILARI: Record<string, number> = {
   "Mareşal": 1, "General": 1, "Albay": 2, "Binbaşı": 3, "Yüzbaşı": 4,
-  "Üsteğmen": 4, "Teğmen": 4, "Astsubay": 4, "Er": 5,
-  "İzci": 2, "İstihkamcı": 4, "Casus": 1, "Bomba": 4, "Bayrak": 1,
+  "Çavuş": 4, "Teğmen": 4, "Onbaşı": 4, "Er": 4,
+  "Keşifçi": 2, "İstihkamcı": 5, "Casus": 1, "Mayın": 5, "Sancak": 1,
 };
 
 // Fisher-Yates. `sort(() => Math.random() - 0.5)` YETMIYOR: karsilastirma
 // tutarsiz oldugu icin dagilim duzgun degil, dizinin bas tarafi yerinde kalmaya
-// meyilli. Dizilimde bu, Bayrak'in konumunu sistematik olarak tahmin edilebilir
+// meyilli. Dizilimde bu, Sancak'in konumunu sistematik olarak tahmin edilebilir
 // yapardi — rastgele dizilen oyuncu icin dogrudan dezavantaj.
 function karistir<T>(dizi: T[]): T[] {
   for (let i = dizi.length - 1; i > 0; i--) {
@@ -393,7 +393,7 @@ export class GameRoom extends DurableObject {
   private async deleteRoom() {
     this.room = null;
     // Kod tek seferlik: oda (oyun bitip silinerek veya bos lobide cikarak)
-    // kapatildiktan sonra ayni kodla yeni oda kurulamaz. Bayrak DO instance'i
+    // kapatildiktan sonra ayni kodla yeni oda kurulamaz. Sancak DO instance'i
     // silinene kadar kalici durur; yeni baglantilar ROOM_CLOSED alir.
     await this.ctx.storage.put("kodKullanildi", true);
     await this.ctx.storage.delete("room");
@@ -500,7 +500,7 @@ export class GameRoom extends DurableObject {
 
   // Bu oyuncunun oynayabilecegi BIR hamle var mi? Iki ayri kilitlenme bunu
   // gerektiriyor:
-  //   1) elinde yalnizca Bomba/Bayrak kaldi (movable:false), bir daha oynayamaz,
+    //   1) elinde yalnizca Mayın/Sancak kaldi (movable:false), bir daha oynayamaz,
   //   2) hareket edebilen taslari var ama hepsi kendi taslari/goller/kenarlarla
   //      cevrili, gidecek kare yok.
   // Ikisinde de oyun eskiden sonsuza kadar surerdi. Rakip tasi DOLU kare gecerli
@@ -550,10 +550,10 @@ export class GameRoom extends DurableObject {
   }
 
   private resolveCombat(a: PieceData, d: PieceData): { outcome: string; attacker: PieceData; defender: PieceData } {
-    if (d.name === "Bayrak") return { outcome: "GAME_OVER", attacker: a, defender: d };
-    // Bomba: ISTIHKAMCI imha eder ve kareye gecer (eski kural, dokunulmadi).
-    // Diger tum taslar bombaya temas edince OLR ve bomba da yok olur.
-    if (d.name === "Bomba") { if (a.special === "MINER") return { outcome: "ATTACKER_WINS", attacker: a, defender: d }; return { outcome: "BOTH_LOSE", attacker: a, defender: d }; }
+    if (d.name === "Sancak") return { outcome: "GAME_OVER", attacker: a, defender: d };
+    // Mayın: ISTIHKAMCI imha eder ve kareye gecer (eski kural, dokunulmadi).
+    // Diger tum taslar mayına temas edince OLR ve mayın da yok olur.
+    if (d.name === "Mayın") { if (a.special === "MINER") return { outcome: "ATTACKER_WINS", attacker: a, defender: d }; return { outcome: "BOTH_LOSE", attacker: a, defender: d }; }
     // Casus HER KOSULDA Maresal'i yener — ister saldirsin ister savunsun. Kural
     // iki yonlu oldugu icin hem saldiri (a SPY, d Maresal) hem savunma (d SPY,
     // a Maresal) dali var. Eskiden yalnizca saldiri tarafiydi; Maresal Casus'a
@@ -817,11 +817,11 @@ export class GameRoom extends DurableObject {
             switch (combatResult.outcome) {
               case "ATTACKER_WINS": opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); if (!isForestTile) movedPiece.revealed = true; targetPiece.revealed = true; break;
               case "DEFENDER_WINS": player.pieces = player.pieces.filter(p => p.id !== movedPiece.id); if (!isForestTile) targetPiece.revealed = true; movedPiece.revealed = true; break;
-              // Bomba da BOTH_LOSE: hem basan tas hem bomba tahtadan kalkar.
-              // Saldiran kime ne oldugunu (Bomba) ancak ACIK alanda ogrenir;
-              // ormandaki bombayi yok eder ama kimligini goremez.
+              // Mayın da BOTH_LOSE: hem basan tas hem mayın tahtadan kalkar.
+              // Saldiran kime ne oldugunu (Mayın) ancak ACIK alanda ogrenir;
+              // ormandaki mayını yok eder ama kimligini goremez.
               case "BOTH_LOSE": player.pieces = player.pieces.filter(p => p.id !== movedPiece.id); opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); if (!isForestTile) targetPiece.revealed = true; movedPiece.revealed = true; break;
-              case "EQUAL_RANK": movedPiece.revealed = true; targetPiece.revealed = true; movedPiece.row = from.row; movedPiece.col = from.col; break;
+              case "EQUAL_RANK": player.pieces = player.pieces.filter(p => p.id !== movedPiece.id); opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); if (!isForestTile) targetPiece.revealed = true; movedPiece.revealed = true; break;
               case "GAME_OVER": opponent.pieces = opponent.pieces.filter(p => p.id !== targetPiece.id); movedPiece.revealed = true; room.gamePhase = "GAME_OVER"; room.winner = player.team; room.gameOverReason = "FLAG"; room.gameOverAt = Date.now(); newWinner = player.team; break;
             }
           }
@@ -830,7 +830,7 @@ export class GameRoom extends DurableObject {
           // "newWinner varsa" yayinlaniyordu.
           let bitisSebebi: GameOverReason | null = newWinner ? "FLAG" : null;
           // Carpismadan sonra bir taraf oynayamaz hale gelmis olabilir: son hareketli
-          // tasini kaybetmis (elinde Bomba/Bayrak kalmis) ya da tikanmis olabilir.
+          // tasini kaybetmis (elinde Mayın/Sancak kalmis) ya da tikanmis olabilir.
           // IKI taraf da denetleniyor — saldiran da son hareketli tasini kaybederek
           // kendini kilitleyebilir. Ikisi birden oynayamiyorsa berabere.
           if (room.gamePhase !== "GAME_OVER") {
@@ -861,7 +861,7 @@ export class GameRoom extends DurableObject {
             outcome: combatResult.outcome,
             attackerName: benSaldiran || movedPiece.revealed ? combatResult.attacker.name : null,
             attackerRank: benSaldiran || movedPiece.revealed ? combatResult.attacker.rank : null,
-            // Ozel yetenek de kimlik bilgisidir: istemci "Istihkamci Bombayi imha etti"
+            // Ozel yetenek de kimlik bilgisidir: istemci "Istihkamci Mayını imha etti"
             // metnini buna gore seciyor, o yuzden ad/rutbe ile AYNI kosula bagli.
             attackerSpecial: benSaldiran || movedPiece.revealed ? combatResult.attacker.special : null,
             defenderName: !benSaldiran || targetPiece?.revealed ? combatResult.defender.name : null,

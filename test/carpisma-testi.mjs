@@ -4,7 +4,7 @@
 // protokol-testi hamle kurallarinda duruyor, carpismaya hic girmiyor.
 //
 // Iki ayri sey olculuyor:
-//   1) KIM KAZANIR  — rutbe siralamasi, Bomba (iki taraf da olur), Casus/Maresal, esit rutbe.
+//   1) KIM KAZANIR  — rutbe siralamasi, Mayın (iki taraf da olur), Casus/Maresal, esit rutbe.
 //   2) KIM NE OGRENIR — carpisma sonucu her iki oyuncu icin AYRI kurgulaniyor
 //      (cP0/cP1, server.ts:409-410). Rutbe gizleme oyunun temeli; oradaki tek bir
 //      yanlis kosul rakibin tasinin rutbesini sizdirir ve kimse fark etmez.
@@ -26,9 +26,9 @@ function tas(id, name, rank, owner, row, col, opts = {}) {
 }
 const kirmizi = (id, name, rank, row, col, opts) => tas(id, name, rank, "1. Oyuncu", row, col, opts);
 const mavi = (id, name, rank, row, col, opts) => tas(id, name, rank, "2. Oyuncu", row, col, opts);
-// Bayraklar olaydan uzakta ve hareketsiz; senaryoyu kazara bitirmesinler.
-const KB = kirmizi("rb", "Bayrak", 0, 0, 10, { movable: false });
-const MB = mavi("mb", "Bayrak", 0, 0, 0, { movable: false });
+// Sancaklar olaydan uzakta ve hareketsiz; senaryoyu kazara bitirmesinler.
+const KB = kirmizi("rb", "Sancak", 0, 0, 10, { movable: false });
+const MB = mavi("mb", "Sancak", 0, 0, 0, { movable: false });
 
 // ARAZI ARTIK SABIT DEGIL: her oyunda sunucuda uretiliyor. Bu yuzden hicbir
 // orman/gol koordinati varsayilmiyor; kareler her odada arazinin kendisinden
@@ -37,7 +37,7 @@ const golMu = (a, r, c) => a.lakes.some((l) => l.row === r && l.col === c);
 const ormanMu = (a, r, c) => a.forests.some((f) => f.row === r && f.col === c);
 const acikMi = (a, r, c) => !golMu(a, r, c) && !ormanMu(a, r, c);
 
-// Bayraklarin durdugu kareler secilemez, yoksa senaryo kazara bayrakla carpisir.
+// Sancaklarin durdugu kareler secilemez, yoksa senaryo kazara bayrakla carpisir.
 const YASAK = ["0,10", "0,0"];
 const serbest = (r, c) => !YASAK.includes(`${r},${c}`);
 
@@ -161,12 +161,12 @@ let ACIK_SALDIRAN, ACIK_HEDEF, ORMAN_SALDIRAN, ORMAN_HEDEF;
 console.log("=== 1) YUKSEK RUTBE ALCAGI YENER (acik alan) ===");
 {
   const { p1, p2 } = await kur(
-    [KB, kirmizi("r1", "Üsteğmen", 5, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
+    [KB, kirmizi("r1", "Çavuş", 5, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
     [MB, mavi("m1", "Er", 2, ACIK_HEDEF.row, ACIK_HEDEF.col)]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
   check(m1?.combatResult?.outcome === "ATTACKER_WINS", "rutbe 5 > rutbe 2, saldiran kazandi", `(${m1?.combatResult?.outcome})`);
   check(m1?.combatResult?.defenderName === "Er", "saldiran, yendigi tasi ogrendi", `(${m1?.combatResult?.defenderName})`);
-  check(m2?.combatResult?.attackerName === "Üsteğmen" && m2?.combatResult?.attackerRank === 5,
+  check(m2?.combatResult?.attackerName === "Çavuş" && m2?.combatResult?.attackerRank === 5,
         "acik alanda kazanan saldiran ACIGA CIKTI", `(${m2?.combatResult?.attackerName}/${m2?.combatResult?.attackerRank})`);
   // Kimin oynadigi gizli bilgi degil (tahtada zaten gorunuyor); istemci carpisma
   // gecmisinde taslari buna gore renklendiriyor.
@@ -196,33 +196,33 @@ console.log("\n=== 2) ZAYIF SALDIRAN OLUR ===");
   await kapat(p1, p2);
 }
 
-// ─── 3) Bomba: uzerine gelen tas OLR, bomba da yok olur ────────────────────
-console.log("\n=== 3) BOMBA HER IKI TASI DA YOK EDER ===");
+// ─── 3) Mayın: uzerine gelen tas OLR, mayın da yok olur ────────────────────
+console.log("\n=== 3) MAYIN HER IKI TASI DA YOK EDER ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "Er", 2, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
-    [MB, mavi("m1", "Bomba", 11, ACIK_HEDEF.row, ACIK_HEDEF.col, { movable: false })]);
+    [MB, mavi("m1", "Mayın", 11, ACIK_HEDEF.row, ACIK_HEDEF.col, { movable: false })]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
-  check(m1?.combatResult?.outcome === "BOTH_LOSE", "bombaya basan tas oldu", `(${m1?.combatResult?.outcome})`);
-  check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "bomba da yok oldu (kare bosaldi)");
+  check(m1?.combatResult?.outcome === "BOTH_LOSE", "mayına basan tas oldu", `(${m1?.combatResult?.outcome})`);
+  check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "mayın da yok oldu (kare bosaldi)");
   check(bos(m2?.opponentBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "basan tas tahtadan kalkti");
   await kapat(p1, p2);
 }
 
-// ─── 4) Istihkamci (MINER) bombayi imha eder ve kareye gecer ───────────────
-// Sunucu bunu ISIMLE karsilastiriyor (name === "Bomba"), bu yuzden istemci taş
+// ─── 4) Istihkamci (MINER) mayını imha eder ve kareye gecer ───────────────
+// Sunucu bunu ISIMLE karsilastiriyor (name === "Mayın"), bu yuzden istemci taş
 // adini asla cevirmiyor (client/constants.ts:50). Ad degisirse kural sessizce kirilir.
-// Eski kural korunuyor: Istihkamci imha eder, DIGER taslar bombayla birlikte olur.
+// Eski kural korunuyor: Istihkamci imha eder, DIGER taslar mayınla birlikte olur.
 console.log("\n=== 4) ISTIHKAMCI BOMBAYI IMHA EDER ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "İstihkamcı", 1, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col, { special: "MINER" })],
-    [MB, mavi("m1", "Bomba", 11, ACIK_HEDEF.row, ACIK_HEDEF.col, { movable: false })]);
+    [MB, mavi("m1", "Mayın", 11, ACIK_HEDEF.row, ACIK_HEDEF.col, { movable: false })]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
-  check(m1?.combatResult?.outcome === "ATTACKER_WINS", "rutbe 1 olmasina ragmen bombayi aldi", `(${m1?.combatResult?.outcome})`);
-  check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "bomba tahtadan kalkti");
+  check(m1?.combatResult?.outcome === "ATTACKER_WINS", "rutbe 1 olmasina ragmen mayını aldi", `(${m1?.combatResult?.outcome})`);
+  check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "mayın tahtadan kalkti");
   check(m2?.opponentBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]?.name === "İstihkamcı", "istihkamci kareye gecti");
-  // Istemci "Istihkamci Bombayi imha etti" metnini bu alana gore seciyor; gelmezse
+  // Istemci "Istihkamci Mayını imha etti" metnini bu alana gore seciyor; gelmezse
   // yerine "rutbesi buyuk olan yendi" basiliyordu (1 > 11 diyen yanlis cumle).
   check(m1?.combatResult?.attackerSpecial === "MINER" && m2?.combatResult?.attackerSpecial === "MINER",
         "ozel yetenek iki tarafa da bildirildi", `(${m1?.combatResult?.attackerSpecial}/${m2?.combatResult?.attackerSpecial})`);
@@ -255,20 +255,20 @@ console.log("\n=== 6) MARESAL SALDIRIRSA BILE CASUS KAZANIR ===");
   await kapat(p1, p2);
 }
 
-// ─── 7) Esit rutbe: ikisi de yasar, saldiran geri doner ───────────────────
-// Istemcinin yerel modundaki davranisla ayni (App.tsx:503) — kasitli kural,
-// klasik Stratego'daki "ikisi de olur" degil.
-console.log("\n=== 7) ESIT RUTBE: IKISI DE YASAR ===");
+// ─── 7) Esit rutbe: ikisi de oyundan cikar ────────────────────────────────
+// Kural degisti: eskiden ikisi de yasiyor, saldiran geri donuyordu (App.tsx:503).
+// Yeni kuralda eşit rütbeler İKİSİ de elenir — klasik Stratego davranışı.
+console.log("\n=== 7) ESIT RUTBE: IKISI DE OLUR ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "Teğmen", 4, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
     [MB, mavi("m1", "Teğmen", 4, ACIK_HEDEF.row, ACIK_HEDEF.col)]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
   check(m1?.combatResult?.outcome === "EQUAL_RANK", "esit rutbe bildirildi", `(${m1?.combatResult?.outcome})`);
-  check(m1?.myBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]?.name === "Teğmen", "saldiran ESKI karesine dondu");
-  check(bos(m1?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "hedef kareye gecmedi");
-  check(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]?.name === "Teğmen", "savunan da hayatta");
-  check(m2?.opponentBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]?.rank === 4, "iki tas da aciga cikti", `(${m2?.opponentBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]?.rank})`);
+  check(bos(m1?.myBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]), "saldiran da tahtadan kalkti");
+  check(bos(m1?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "hedef karede de tas yok");
+  check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "savunan da tahtadan kalkti");
+  check(bos(m2?.opponentBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]), "rakip taraf da saldiranin kalktigini goruyor");
   await kapat(p1, p2);
 }
 
@@ -278,11 +278,11 @@ console.log("\n=== 7) ESIT RUTBE: IKISI DE YASAR ===");
 console.log("\n=== 8) ORMANDA KAZANAN SALDIRAN GIZLI KALIR ===");
 {
   const { p1, p2 } = await kur(
-    [KB, kirmizi("r1", "Üsteğmen", 5, ORMAN_SALDIRAN.row, ORMAN_SALDIRAN.col)],
+    [KB, kirmizi("r1", "Çavuş", 5, ORMAN_SALDIRAN.row, ORMAN_SALDIRAN.col)],
     [MB, mavi("m1", "Er", 2, ORMAN_HEDEF.row, ORMAN_HEDEF.col)]);
   const { m1, m2 } = await hamle(p1, p2, p1, ORMAN_SALDIRAN, ORMAN_HEDEF);
   check(m1?.combatResult?.outcome === "ATTACKER_WINS", "saldiran kazandi", `(${m1?.combatResult?.outcome})`);
-  check(m1?.combatResult?.attackerName === "Üsteğmen", "saldiran KENDI tasini gormeye devam ediyor", `(${m1?.combatResult?.attackerName})`);
+  check(m1?.combatResult?.attackerName === "Çavuş", "saldiran KENDI tasini gormeye devam ediyor", `(${m1?.combatResult?.attackerName})`);
   check(m2?.combatResult?.attackerName === null && m2?.combatResult?.attackerRank === null,
         "rakip saldiranin kim oldugunu OGRENEMEDI",
         `(${m2?.combatResult?.attackerName}/${m2?.combatResult?.attackerRank})`);
@@ -294,33 +294,33 @@ console.log("\n=== 8) ORMANDA KAZANAN SALDIRAN GIZLI KALIR ===");
   await kapat(p1, p2);
 }
 
-// ─── 9) ORMAN: bombaya basan da gizli kalir, bomba da yok olur ─────────────
-// Saldiran "kaybettim" bilir ama neye kaybettigini bilmez; bomba ORMANDA
+// ─── 9) ORMAN: mayına basan da gizli kalir, mayın da yok olur ─────────────
+// Saldiran "kaybettim" bilir ama neye kaybettigini bilmez; mayın ORMANDA
 // oldugu icin kimligi acilmaz (3. senaryoda ayni carpisma acik alandaydi).
-console.log("\n=== 9) ORMANDAKI BOMBA GIZLI KALIR VE YOK OLUR ===");
+console.log("\n=== 9) ORMANDAKI MAYIN GIZLI KALIR VE YOK OLUR ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "Er", 2, ORMAN_SALDIRAN.row, ORMAN_SALDIRAN.col)],
-    [MB, mavi("m1", "Bomba", 11, ORMAN_HEDEF.row, ORMAN_HEDEF.col, { movable: false })]);
+    [MB, mavi("m1", "Mayın", 11, ORMAN_HEDEF.row, ORMAN_HEDEF.col, { movable: false })]);
   const { m1, m2 } = await hamle(p1, p2, p1, ORMAN_SALDIRAN, ORMAN_HEDEF);
   check(m1?.combatResult?.outcome === "BOTH_LOSE", "saldiran oldu", `(${m1?.combatResult?.outcome})`);
   check(m1?.combatResult?.defenderName === null && m1?.combatResult?.defenderRank === null,
         "neye kaybettigini OGRENEMEDI", `(${m1?.combatResult?.defenderName}/${m1?.combatResult?.defenderRank})`);
-  check(bos(m1?.opponentBoard?.[ORMAN_HEDEF.row]?.[ORMAN_HEDEF.col]), "bomba da yok oldu (kare bosaldi)");
+  check(bos(m1?.opponentBoard?.[ORMAN_HEDEF.row]?.[ORMAN_HEDEF.col]), "mayın da yok oldu (kare bosaldi)");
   check(m2?.combatResult?.attackerName === "Er", "olen saldiran ise aciga cikti", `(${m2?.combatResult?.attackerName})`);
   await kapat(p1, p2);
 }
 
-// ─── 10) Bayrak alinirsa oyun biter ───────────────────────────────────────
+// ─── 10) Sancak alinirsa oyun biter ───────────────────────────────────────
 // NOT: sunucu bayragi ACIGA CIKARMIYOR (GAME_OVER dali targetPiece.revealed'i
 // set etmiyor), yani ALAN oyuncuya defenderName null gidiyor. Istemci bunu
-// outcome === "GAME_OVER" oldugu icin "Bayrak" diye turetiyor; carpisma
+// outcome === "GAME_OVER" oldugu icin "Sancak" diye turetiyor; carpisma
 // gecmisinde "???" yazmasin diye. Burada bu alan bilerek olculmuyor.
 console.log("\n=== 10) BAYRAK ALINIRSA OYUN BITER ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "Er", 2, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
-    [mavi("m1", "Bayrak", 0, ACIK_HEDEF.row, ACIK_HEDEF.col, { movable: false })]);
+    [mavi("m1", "Sancak", 0, ACIK_HEDEF.row, ACIK_HEDEF.col, { movable: false })]);
   const { m1 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
   check(m1?.combatResult?.outcome === "GAME_OVER", "carpisma sonucu GAME_OVER", `(${m1?.combatResult?.outcome})`);
   check(m1?.nextPhase === "GAME_OVER" && m1?.winner === "1. Oyuncu", "faz ve kazanan dogru", `(${m1?.nextPhase}/${m1?.winner})`);

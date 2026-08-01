@@ -6,7 +6,9 @@ const MUSIC_URL = '/game_music.mp3';
 // yukleme yok: acilista game_music.mp3 zaten 3.6 MB, ustune efekt bindirmiyoruz).
 // gain = efektin kendi seviyesi; ustune bir de kullanicinin ses ayari (masterGain)
 // binyor. Yeni efekt gelince buraya bir satir + asagida bir metot govdesi yeter.
-const FX_MOVE = { url: '/sfx-move.mp3', gain: 0.7 };
+const FX_MOVE = { url: '/sfx/sfx-move.mp3', gain: 0.7 };
+const FX_DEFEAT = { url: '/sfx/defeat.mp3', gain: 0.7 };
+const FX_WINNER = { url: '/sfx/winner.mp3', gain: 0.7 };
 
 class SoundManager {
   private ctx: AudioContext | null = null;
@@ -190,6 +192,8 @@ class SoundManager {
   playCombat() {}
   playExplosion() {}
   playVictory() {}
+  playDefeat() { this.playFx(FX_DEFEAT.url, FX_DEFEAT.gain); }
+  playWinner() { this.playFx(FX_WINNER.url, FX_WINNER.gain); }
 }
 
 export const soundManager = new SoundManager();

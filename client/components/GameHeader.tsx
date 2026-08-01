@@ -123,8 +123,8 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                         <div className={`flex-1 min-w-0 flex items-center justify-center gap-3 px-3 py-2 rounded-xl bg-slate-800/40 border text-xs font-bold ${durumRengi || 'text-slate-300 border-slate-700/60'}`}>
                             <span className="truncate">{durumMetni}</span>
                             {gamePhase.startsWith('PLAY') && (
-                                <span className="flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-md bg-slate-950/60 border border-slate-700/60 font-mono">
-                                    <Clock className="w-3 h-3" />
+                                <span className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1 rounded-lg bg-slate-950/60 border border-slate-700/60 font-mono text-lg tabular-nums">
+                                    <Clock className="w-5 h-5" />
                                     {turnTimeRemaining}{t.seconds}
                                 </span>
                             )}

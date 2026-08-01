@@ -124,14 +124,14 @@ function tahtaKur(arazi) {
     if (!ormanMu(arazi, ORMAN_HEDEF.row, c) && !golMu(arazi, ORMAN_HEDEF.row, c)) { ORMAN_SATIR_ACIK = c; break; }
   }
   KIRMIZI = [
-    tas("r-bayrak", "Bayrak", 0, "1. Oyuncu", 9, 10, { movable: false }),
-    tas("r-izci-acik", "İzci", 2, "1. Oyuncu", ACIK_SATIR, 7, { special: "SCOUT" }),
-    tas("r-izci-gol", "İzci", 2, "1. Oyuncu", GOL_SATIR, 7, { special: "SCOUT" }),
-    tas("r-izci-orman", "İzci", 2, "1. Oyuncu", ORMAN_HEDEF.row, ORMAN_HEDEF.col + 1, { special: "SCOUT" }),
+    tas("r-bayrak", "Sancak", 0, "1. Oyuncu", 9, 10, { movable: false }),
+    tas("r-izci-acik", "Keşifçi", 2, "1. Oyuncu", ACIK_SATIR, 7, { special: "SCOUT" }),
+    tas("r-izci-gol", "Keşifçi", 2, "1. Oyuncu", GOL_SATIR, 7, { special: "SCOUT" }),
+    tas("r-izci-orman", "Keşifçi", 2, "1. Oyuncu", ORMAN_HEDEF.row, ORMAN_HEDEF.col + 1, { special: "SCOUT" }),
     tas("r-er", "Er", 2, "1. Oyuncu", 7, 7),
   ];
   MAVI = [
-    tas("m-bayrak", "Bayrak", 0, "2. Oyuncu", 9, 0, { movable: false }),
+    tas("m-bayrak", "Sancak", 0, "2. Oyuncu", 9, 0, { movable: false }),
     tas("m-maresal", "Mareşal", 10, "2. Oyuncu", ACIK_SATIR, 3),  // acik hedef
     // Bekleme suresi dolduktan sonraki IKINCI gorev icin ayni satirda ayri hedef.
     // (ACIK_SATIR,2) BOS birakiliyor: senaryo 3 orayi "bos hedef" diye kullaniyor.
@@ -324,7 +324,7 @@ console.log("\n=== 4) ORMANDAKI HEDEF ===");
   // satirda ama ormansiz karede: reddin sebebi orman mi, yoksa Izci'nin hakki mi
   // tukendi, ayirt edilebilsin.
   p2.send(JSON.stringify({ type: "setup_complete", placedPieces: [
-    tas("m-bayrak", "Bayrak", 0, "2. Oyuncu", 9, 0, { movable: false }),
+    tas("m-bayrak", "Sancak", 0, "2. Oyuncu", 9, 0, { movable: false }),
     tas("m-orman", "Albay", 8, "2. Oyuncu", ORMAN_HEDEF.row, ORMAN_HEDEF.col),
     tas("m-acik", "Yüzbaşı", 6, "2. Oyuncu", ORMAN_HEDEF.row, ORMAN_SATIR_ACIK),
   ] }));

@@ -43,7 +43,7 @@ const CombatHistoryItem: React.FC<{ result: CombatResult; lang: Language }> = ({
     let winnerText = '';
     switch (outcome) {
         case 'ATTACKER_WINS':
-            if (attacker.special === SpecialAbility.MINER && defender.name === 'Bomba') {
+            if (attacker.special === SpecialAbility.MINER && defender.name === 'Mayın') {
                 winnerText = t.combatMiner;
             } else if (attacker.special === SpecialAbility.SPY && defender.rank === 10) {
                 winnerText = t.combatSpy;
@@ -55,13 +55,13 @@ const CombatHistoryItem: React.FC<{ result: CombatResult; lang: Language }> = ({
             winnerText = fill(t.combatFlagCaptured);
             break;
         case 'DEFENDER_WINS':
-            if (defender.name === 'Bomba') { winnerText = fill(t.combatBombHit); }
+            if (defender.name === 'Mayın') { winnerText = fill(t.combatBombHit); }
             else if (defender.special === SpecialAbility.SPY && attacker.rank === 10) { winnerText = t.combatSpy; }
             else { winnerText = fill(t.combatDefenderWins); }
             break;
         case 'EQUAL_RANK':
         case 'BOTH_LOSE':
-            if (defender.name === 'Bomba') { winnerText = fill(t.combatBombHit); }
+            if (defender.name === 'Mayın') { winnerText = fill(t.combatBombHit); }
             else { winnerText = fill(t.combatEqualRank); }
             break;
     }

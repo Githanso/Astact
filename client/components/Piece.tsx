@@ -49,12 +49,12 @@ const Piece: React.FC<PieceProps> = ({ piece, isOpponent, onDragStart, lang = 'T
             <div 
                 className={`w-full h-full rounded-md ${teamStyle} border-2 flex flex-col items-center justify-center p-1 shadow-lg cursor-grab active:cursor-grabbing transition-transform duration-200 transform group-hover:scale-200 group-hover:shadow-2xl group-hover:ring-2 group-hover:ring-amber-300 relative overflow-hidden select-none`}
             >
-                {piece.name === 'Bayrak' ? (
+                {piece.name === 'Sancak' ? (
                     <div className="flex flex-col items-center justify-center">
                         <Flag className="w-5 h-5 text-amber-300 animate-pulse" />
                         <span className="text-[10px] font-extrabold uppercase tracking-tight mt-0.5">{label}</span>
                     </div>
-                ) : piece.name === 'Bomba' ? (
+                ) : piece.name === 'Mayın' ? (
                     <div className="flex flex-col items-center justify-center">
                         <Bomb className="w-5 h-5 text-red-400" />
                         <span className="text-[10px] font-extrabold uppercase tracking-tight mt-0.5">{label}</span>

@@ -20,7 +20,7 @@ const files = [
 ];
 
 // Protokol kimligi olan degerler — CEVRILMEMELI, denetimde gormezden gelinir.
-const KIMLIK = [/PLAYERS\./, /'Bomba'/, /'Bayrak'/, /localStorage/, /astact_player_token/,
+const KIMLIK = [/PLAYERS\./, /'Mayın'/, /'Sancak'/, /localStorage/, /astact_player_token/,
   /'1\. Oyuncu'\s*\|/, /:\s*'1\. Oyuncu'/,  // Player tip literali = protokol kimligi
   // Dil adi ENDONIM: "Türkçe" her arayuz dilinde Türkçe yazilir, cevrilmez —
   // dil secicide kullanici kendi dilini kendi dilinde arar. Degisken bilerek

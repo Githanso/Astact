@@ -55,26 +55,29 @@ const gecmis = [
   // Rakip saldirdi ve kazandi -> olen BENIM tasim
   { outcome: 'ATTACKER_WINS', attacker: k(MAVI, 'Mareşal'), defender: k(KIRMIZI, 'Yüzbaşı') },
   // Ben saldirdim ve kaybettim -> olen BENIM tasim
-  { outcome: 'DEFENDER_WINS', attacker: k(KIRMIZI, 'Er'), defender: k(MAVI, 'Bomba') },
-  // Esit rutbe: KIMSE olmuyor
+  { outcome: 'DEFENDER_WINS', attacker: k(KIRMIZI, 'Er'), defender: k(MAVI, 'Mayın') },
+  // Esit rutbe: IKISI DE oluyor -> rakip (mavi) Albay kayip sayilir
   { outcome: 'EQUAL_RANK', attacker: k(KIRMIZI, 'Albay'), defender: k(MAVI, 'Albay') },
-  // Bayrak dustu
-  { outcome: 'GAME_OVER', attacker: k(KIRMIZI, 'Er'), defender: k(MAVI, 'Bayrak') },
+  // Mayın patlamasi: ikisi de oluyor -> rakip taraf kayip sayilir
+  { outcome: 'BOTH_LOSE', attacker: k(KIRMIZI, 'Er'), defender: k(MAVI, 'Mayın') },
+  // Sancak dustu
+  { outcome: 'GAME_OVER', attacker: k(KIRMIZI, 'Er'), defender: k(MAVI, 'Sancak') },
   // Kimligi bilinmeyen kayit atlanmali (uydurma sayim uretilmemeli)
   { outcome: 'ATTACKER_WINS', attacker: k(KIRMIZI, 'Er'), defender: k(MAVI, '???') },
 ];
 
 const kirmiziGozuyle = rakipKayiplari(gecmis, KIRMIZI);
-kontrol('rakip kayiplari dogru', { 'Teğmen': 1, 'Er': 1, 'Bayrak': 1 }, kirmiziGozuyle);
-kontrol('esit rutbe kayip saymiyor', undefined, kirmiziGozuyle['Albay']);
+kontrol('rakip kayiplari dogru', { 'Teğmen': 1, 'Er': 1, 'Albay': 1, 'Mayın': 1, 'Sancak': 1 }, kirmiziGozuyle);
+kontrol('esit rutbede rakip tasi kayip sayiliyor', 1, kirmiziGozuyle['Albay']);
 kontrol('kendi kaybim rakip kaybi sayilmiyor', undefined, kirmiziGozuyle['Yüzbaşı']);
 kontrol('bilinmeyen kimlik atlandi', undefined, kirmiziGozuyle['???']);
 
 // AYNA: ayni gecmisi mavi okuyunca kirmizi kayiplari cikmali.
 // DIKKAT: 1. kayitta olen mavi savunan, 2. kayitta olen mavi saldiran — ikisi de
 // mavinin KENDI kaybi. Geriye 3. (kirmizi savunurken oldu) ve 4. (kirmizi
-// saldirirken oldu) kaliyor.
-kontrol('ayna: mavinin gozunden kirmizi kayiplari', { 'Yüzbaşı': 1, 'Er': 1 }, rakipKayiplari(gecmis, MAVI));
+// saldirirken oldu) kaliyor. Esit rutbede kirmizi Albay, BOTH_LOSE'da kirmizi Er
+// de rakip kaybi olarak ekleniyor (kural: ikisi de oyundan cikar).
+kontrol('ayna: mavinin gozunden kirmizi kayiplari', { 'Yüzbaşı': 1, 'Er': 2, 'Albay': 1 }, rakipKayiplari(gecmis, MAVI));
 kontrol('gecmis bossa bos donuyor', {}, rakipKayiplari([], KIRMIZI));
 
 console.log(hata === 0 ? '\n=== TAS SAYIMI DENETIMI TEMIZ ===' : `\n=== ${hata} BULGU ===`);

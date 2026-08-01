@@ -24,11 +24,11 @@ function piece(id, name, rank, owner, row, col, opts = {}) {
 }
 // P1 hazir diyecek; P2 hic dizmeyecek ve sureyi doldurmasi beklenecek.
 const RED = [
-  piece("r1", "Bayrak", 0, "1. Oyuncu", 0, 10, { movable: false }),
+  piece("r1", "Sancak", 0, "1. Oyuncu", 0, 10, { movable: false }),
   piece("r2", "Er", 2, "1. Oyuncu", 3, 7),
 ];
 const BLUE_GEC = [
-  piece("b1", "Bayrak", 0, "2. Oyuncu", 0, 0, { movable: false }),
+  piece("b1", "Sancak", 0, "2. Oyuncu", 0, 0, { movable: false }),
   piece("b2", "Er", 2, "2. Oyuncu", 3, 3),
 ];
 
@@ -95,10 +95,10 @@ check(!!bs2, "P2 both_setup_complete aldi", bs2 ? `${gecen}sn sonra` : "<-- HIC 
 check(!!bs1, "P1 both_setup_complete aldi");
 check(bs2?.gamePhase === "PLAY_RED", "faz PLAY_RED", bs2 ? `(${bs2.gamePhase})` : "");
 check(tasSay(bs2?.myPieces) === TOPLAM_TAS, "P2'nin tahtasinda 40 tas var (kismi + rastgele)", `(${tasSay(bs2?.myPieces)})`);
-// P2'nin kendisi dizmis oldugu iki tas KORUNMALI: Bayrak 0,0 ve Er 3,3 yerinde.
+// P2'nin kendisi dizmis oldugu iki tas KORUNMALI: Sancak 0,0 ve Er 3,3 yerinde.
 const b1kare = bs2?.myPieces?.[0]?.[0];
 const b2kare = bs2?.myPieces?.[3]?.[3];
-check(b1kare?.name === "Bayrak" && b1kare?.owner === "2. Oyuncu", "P2'nin dizdigi Bayrak korundu", `(0,0 = ${b1kare?.name || "bos"})`);
+check(b1kare?.name === "Sancak" && b1kare?.owner === "2. Oyuncu", "P2'nin dizdigi Sancak korundu", `(0,0 = ${b1kare?.name || "bos"})`);
 check(b2kare?.name === "Er" && b2kare?.owner === "2. Oyuncu", "P2'nin dizdigi Er korundu", `(3,3 = ${b2kare?.name || "bos"})`);
 // P1 yalnizca 2 tas bildirmisti; sunucu ONUN dizilimine dokunmamali.
 check(tasSay(bs1?.myPieces) === RED.length, "P1'in kendi dizilimi korundu", `(${tasSay(bs1?.myPieces)} tas)`);

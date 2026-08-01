@@ -17,6 +17,7 @@ import OnlineModal from './components/OnlineModal';
 import ConnectionBanner from './components/ConnectionBanner';
 import MoveErrorToast from './components/MoveErrorToast';
 import { soundManager } from './lib/soundFX';
+import { oyunGorselleriYukle } from './lib/preloadAssets';
 
 // Sunucudaki DISCONNECT_TIMEOUT_MS ile ayni: rakip donmezse oyun bu surenin
 // sonunda hukmen bitiyor. Sunucu roomState.disconnectTimeoutMs ile de bildiriyor;
@@ -49,6 +50,10 @@ const mergeBoards = (mb: BoardState, pieces: any[]) => {
 const App: React.FC = () => {
     // Giris ekrani. gamePhase'e dokunmaz, yalnizca render'i kapilar.
     const [screen, setScreen] = useState<'MENU' | 'GAME'>('MENU');
+    // Oyun tahtasi grafikleri (floor/forest/lake avif) hazir mi? Hazir olmadan
+    // oyun ekranina gecilmez; yukleme MENUde gizli yapilir, bitince gecis aninda
+    // acilir. Boylece oyun ekrani acilirken kareler bos gorunmez.
+    const [oyunGorselleriHazir, setOyunGorselleriHazir] = useState(false);
     const [board, setBoard] = useState<BoardState>(createEmptyBoard);
     const [gamePhase, setGamePhase] = useState<GamePhase>('SETUP_RED');
     const [selectedPiece, setSelectedPiece] = useState<PlacedPiece | null>(null);
@@ -188,6 +193,7 @@ const App: React.FC = () => {
         setIsOnlineMode(false); setRoomCode(null); setMyOnlineTeam(null); setRoomState(null);
         setIsOnlineModalOpen(false); setIsWaitingOpponentSetup(false); setRestartNotice(null); setShowRoomCode(false);
         setMissedTurns({ red: 0, blue: 0 }); setIsDraw(false); setSetupTimeRemaining(null);
+        setGameStartedAt(null); setGecenSure(0);
         setBoard(createEmptyBoard(terrainRef.current.lakes)); setGamePhase('SETUP_RED');
         setPiecesToPlace(createInitialPiecePool());
         setScreen('MENU');
@@ -254,7 +260,10 @@ const App: React.FC = () => {
             // SETUP'a cekiyor; winner/isDraw/gameOverReason bayat kalirsa
             // sonuc ekrani dizilimin ustunde asili kaliyor (bkz. README, "berabere
             // sonrasi Yeniden Baslat calismiyor").
-            case 'room_started_setup': setRoomState(msg.roomState); setIsOnlineModalOpen(false); setScreen('GAME'); setShowRoomCode(false); setWinner(null); setGameOverReason(null); setIsDraw(false); setRestartNotice(null); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
+            // Gecen oyun suresi de SIFIRLANMALI: bu dal yeni bir oyunun dizilimini
+            // acmis oluyor, eski oyunun sayaci birakilirsa yeni oyun sifirdan degil
+            // onceki oyunun suresinden devam ediyormus gibi gorunuyordu.
+            case 'room_started_setup': setRoomState(msg.roomState); setIsOnlineModalOpen(false); setScreen('GAME'); setShowRoomCode(false); setWinner(null); setGameOverReason(null); setIsDraw(false); setGameStartedAt(null); setGecenSure(0); setRestartNotice(null); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
             case 'player_setup_status': setRoomState(prev => prev ? { ...prev, redReady: msg.redReady, blueReady: msg.blueReady } : prev); break;
             case 'both_setup_complete': { const mb = createEmptyBoard(terrainRef.current.lakes); mergeBoards(mb, msg.myPieces); mergeBoards(mb, msg.opponentPieces); setBoard(mb); setGamePhase(msg.gamePhase || 'PLAY_RED'); setGameStartedAt(msg.gameStartedAt ?? Date.now()); setIsWaitingOpponentSetup(false); setIsOnlineModalOpen(false); setWinner(null); setGameOverReason(null); setIsDraw(false); setRestartNotice(null); setSetupTimeRemaining(null); setPiecesToPlace([]); setSelectedPieceToPlace(null); if (!hazirDedimRef.current) setMoveError(prev => ({ metin: TR_KEY('setupTimedOut'), no: (prev?.no ?? 0) + 1 })); soundManager.playVictory(); confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); break; }
             // Yeniden baglanmada tahta bastan kuruluyor; eldeki secim de bayat.
@@ -281,11 +290,11 @@ const App: React.FC = () => {
             // cevriliyor. Burada eskiden YALNIZCA name+rank dolduruluyordu; owner ve
             // special bos kaldigi icin pano her iki tasi da "2. Oyuncu" diye
             // etiketliyor (owner === RED hicbir zaman tutmuyordu) ve Istihkamci/Casus
-            // metinleri hic secilemiyordu — Istihkamci bombayi aldiginda ekranda
-            // "Istihkamci (1) > Bomba (11) — rutbesi buyuk olan yendi" yaziyordu.
+            // metinleri hic secilemiyordu — Istihkamci mayını aldiginda ekranda
+            // "Istihkamci (1) > Mayın (11) — rutbesi buyuk olan yendi" yaziyordu.
             //
             // Rutbe BILINCE null birakiliyor, 0'a cevrilmiyor: 0 gercek bir rutbe
-            // (Bayrak) ve ormanda gizlenen tasi "Rutbe 0" diye gosteriyordu.
+            // (Sancak) ve ormanda gizlenen tasi "Rutbe 0" diye gosteriyordu.
             // Hamle onaylandi -> SECIM SIFIRLANMALI. Sifirlanmadiginda:
             //   1) sari "gidebilecegin kareler" isaretleri ekranda takili kaliyor,
             //   2) selectedPiece.position tasin ESKI karesini gostermeye devam ediyor;
@@ -293,7 +302,7 @@ const App: React.FC = () => {
             //      BOS olan kareyi yolluyor ve sunucu "Tas bulunamadi" ile reddediyor.
             // Hamle biten diger tum yollar (turn_timeout, game_restarted, yerel mod)
             // zaten temizliyordu; atlanan tek yer buydu.
-            case 'move_executed': { const mb = createEmptyBoard(terrainRef.current.lakes); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); setSelectedPiece(null); setValidMoves([]); if (msg.nextPhase) setGamePhase(msg.nextPhase); const saldiranTakim: Player = msg.attackerTeam === PLAYERS.BLUE ? PLAYERS.BLUE : PLAYERS.RED; if (msg.to) setLastMove({ coords: { row: msg.to.row, col: msg.to.col }, owner: saldiranTakim }); if (msg.combatResult) { const c = msg.combatResult; const savunanTakim: Player = saldiranTakim === PLAYERS.RED ? PLAYERS.BLUE : PLAYERS.RED; const cr: CombatResult = { outcome: c.outcome as any, attacker: { name: c.attackerName || '???', rank: c.attackerRank ?? null, special: c.attackerSpecial ?? null, owner: saldiranTakim } as any, defender: { name: c.defenderName || (c.outcome === 'GAME_OVER' ? 'Bayrak' : '???'), rank: c.defenderRank ?? null, owner: savunanTakim } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); } if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); soundManager.playVictory(); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } break; }
+            case 'move_executed': { const mb = createEmptyBoard(terrainRef.current.lakes); mergeBoards(mb, msg.myBoard); mergeBoards(mb, msg.opponentBoard); setBoard(mb); setSelectedPiece(null); setValidMoves([]); if (msg.nextPhase) setGamePhase(msg.nextPhase); const saldiranTakim: Player = msg.attackerTeam === PLAYERS.BLUE ? PLAYERS.BLUE : PLAYERS.RED; if (msg.to) setLastMove({ coords: { row: msg.to.row, col: msg.to.col }, owner: saldiranTakim }); if (msg.combatResult) { const c = msg.combatResult; const savunanTakim: Player = saldiranTakim === PLAYERS.RED ? PLAYERS.BLUE : PLAYERS.RED; const cr: CombatResult = { outcome: c.outcome as any, attacker: { name: c.attackerName || '???', rank: c.attackerRank ?? null, special: c.attackerSpecial ?? null, owner: saldiranTakim } as any, defender: { name: c.defenderName || (c.outcome === 'GAME_OVER' ? 'Sancak' : '???'), rank: c.defenderRank ?? null, owner: savunanTakim } as any, timestamp: Date.now() }; setCombatHistory(prev => [cr, ...prev]); setLastCombatCoords({ row: msg.to?.row ?? 0, col: msg.to?.col ?? 0 }); setStats(s => ({ ...s, totalBattles: s.totalBattles + 1 })); soundManager.playCombat(); } else { soundManager.playMove(); }                 if (msg.winner) { setWinner(msg.winner); setGamePhase('GAME_OVER'); } break; }
             // Hamle hatasi ARTIK onlineErrorMessage'a yazilmiyor: o alan yalnizca
             // OnlineModal icinde basiliyor, oyun sirasinda o modal kapali oldugu icin
             // red gorunmuyordu (bkz. MoveErrorToast). Ustelik metin orada takili
@@ -333,9 +342,12 @@ const App: React.FC = () => {
                 if (msg.missedTurns) setMissedTurns(msg.missedTurns);
                 setGamePhase('GAME_OVER');
                 setConnectionNotice(null);
-                soundManager.playVictory();
-                if (msg.winner && msg.winner === myOnlineTeamRef.current) {
+                const kazandim = !!msg.winner && (!myOnlineTeamRef.current || msg.winner === myOnlineTeamRef.current);
+                if (kazandim) {
+                    soundManager.playWinner();
                     confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+                } else if (msg.winner && myOnlineTeamRef.current) {
+                    soundManager.playDefeat();
                 }
                 break;
             }
@@ -380,7 +392,10 @@ const App: React.FC = () => {
                 }
                 break;
             }
-            case 'game_restarted': setGameStartedAt(null); setBoard(createEmptyBoard(terrainRef.current.lakes)); setSelectedPiece(null); setValidMoves([]); setPiecesToPlace(createInitialPiecePool()); setSelectedPieceToPlace(null); setWinner(null); setGameOverReason(null); setConnectionNotice(null); setConnectionSec(null); setRedCaptured([]); setBlueCaptured([]); setCombatHistory([]); setIsWaitingOpponentSetup(false); setMissedTurns({ red: 0, blue: 0 }); setIsDraw(false); setRestartNotice(null); setRoomState(msg.roomState); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
+            // gecenSure'yi de SIFIRLA: gameStartedAt null olunca sayac effect'i basta
+            // return ediyor, dolayisiyla eski deger kendiliginden temizlenmiyordu ve
+            // yeni oyunun diziliminde onceki oyunun suresi ekranda asili kaliyordu.
+            case 'game_restarted': setGameStartedAt(null); setGecenSure(0); setBoard(createEmptyBoard(terrainRef.current.lakes)); setSelectedPiece(null); setValidMoves([]); setPiecesToPlace(createInitialPiecePool()); setSelectedPieceToPlace(null); setWinner(null); setGameOverReason(null); setConnectionNotice(null); setConnectionSec(null); setRedCaptured([]); setBlueCaptured([]); setCombatHistory([]); setIsWaitingOpponentSetup(false); setMissedTurns({ red: 0, blue: 0 }); setIsDraw(false); setRestartNotice(null); setRoomState(msg.roomState); setMyOnlineTeam(prev => { setGamePhase(prev === PLAYERS.RED ? 'SETUP_RED' : 'SETUP_BLUE'); return prev; }); break;
         }
     }, []);
 
@@ -390,8 +405,18 @@ const App: React.FC = () => {
     // dolunca sunucu zaten oyunu hukmen bitiriyor, daha fazla denemenin anlami yok.
     const connectWs = useCallback((room: string, name: string) => {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let token = localStorage.getItem('astact_player_token');
-        if (!token) { token = crypto.randomUUID(); localStorage.setItem('astact_player_token', token); }
+        // Token SEKME BASINA (sessionStorage), pencere/profil basina DEGIL. localStorage
+        // ayni origin'in tum sekmelerinde ortak oldugu icin, ayni bilgisayarda iki
+        // sekmeyle oynamak isteyen iki kisi AYNI token'i yolluyordu; sunucu bunu
+        // "ayni oyuncu geri dondu" sayip ikinci sekmeyi 1. oyuncunun SLOTUNA oturtuyor
+        // ve ilk sekmenin soketini kapatiyordu (bkz. src/server.ts, token eslesmesi).
+        // Sonuc: iki taraf da sonsuza kadar "rakip bekleniyor" ekraninda kaliyordu.
+        // sessionStorage sayfa YENILEMESINI atlatir — kopma/refresh sonrasi yeniden
+        // baglanma calismaya devam eder — ama her yeni sekme ayri oyuncu olur.
+        // Bedeli bilincli: sekme TAMAMEN kapatilirsa kimlik kaybolur, o odaya eski
+        // slotuyla geri donulemez.
+        let token = sessionStorage.getItem('astact_player_token');
+        if (!token) { token = crypto.randomUUID(); sessionStorage.setItem('astact_player_token', token); }
         const url = `${protocol}//${window.location.host}/ws/game-room?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&token=${encodeURIComponent(token)}`;
         odaBilgisiRef.current = { room, name };
         kastenAyrildiRef.current = false;
@@ -502,6 +527,12 @@ const App: React.FC = () => {
     useEffect(() => {
         soundManager.setMusicAllowed(screen === 'MENU');
     }, [screen]);
+
+    // Oyun grafiklerini acilista gizlice on yukle: oyun ekranina gecis ancak
+    // hazir olunca mumkun (asagida screen === 'MENU' || !oyunGorselleriHazir).
+    useEffect(() => {
+        oyunGorselleriYukle(() => setOyunGorselleriHazir(true));
+    }, []);
 
 
     const currentPlayer = useMemo(() => { if (gamePhase === 'SETUP_RED' || gamePhase === 'PLAY_RED') return PLAYERS.RED; if (gamePhase === 'SETUP_BLUE' || gamePhase === 'PLAY_BLUE') return PLAYERS.BLUE; return null; }, [gamePhase]);
@@ -735,6 +766,7 @@ const App: React.FC = () => {
     };
 
     const handlePiecePlacement = (coords: Coords, targetPiece?: PieceDefinition | null) => {
+        if (isWaitingOpponentSetup) return;
         const pu = targetPiece || selectedPieceToPlace; if (!pu) return;
         const ap = (isOnlineMode && myOnlineTeam) ? myOnlineTeam : currentPlayer; if (!ap) return;
         const { row, col } = coords; const isRed = ap === PLAYERS.RED;
@@ -753,8 +785,8 @@ const App: React.FC = () => {
     };
 
     const resolveCombat = (attacker: PlacedPiece, defender: PlacedPiece): CombatResult => {
-        if (defender.name === 'Bayrak') { soundManager.playVictory(); return { outcome: 'GAME_OVER', attacker, defender }; }
-        if (defender.name === 'Bomba') { if (attacker.special === SpecialAbility.MINER) { soundManager.playCombat(); return { outcome: 'ATTACKER_WINS', attacker, defender }; } soundManager.playExplosion(); return { outcome: 'BOTH_LOSE', attacker, defender }; }
+        if (defender.name === 'Sancak') { soundManager.playVictory(); return { outcome: 'GAME_OVER', attacker, defender }; }
+        if (defender.name === 'Mayın') { if (attacker.special === SpecialAbility.MINER) { soundManager.playCombat(); return { outcome: 'ATTACKER_WINS', attacker, defender }; } soundManager.playExplosion(); return { outcome: 'BOTH_LOSE', attacker, defender }; }
         if (attacker.special === SpecialAbility.SPY && defender.rank === 10) { soundManager.playCombat(); return { outcome: 'ATTACKER_WINS', attacker, defender }; }
         // Savunmadaki Casus da Mareşal'i yener (kural iki yonlu). Bu dal olmasa
         // Mareşal Casus'a saldirinca rutbe karsilastirmasi (10>1) kazandi derdi.
@@ -784,7 +816,7 @@ const App: React.FC = () => {
             switch (cr.outcome) {
                 case 'ATTACKER_WINS': nb[fr][fc] = null; nb[tr][tc] = { ...attacker, revealed: isForest ? false : true }; if (defender.owner === PLAYERS.RED) { rc.push(defender); setRedCaptured(rc); } else { bc.push(defender); setBlueCaptured(bc); } break;
                 case 'DEFENDER_WINS': nb[fr][fc] = null; nb[tr][tc] = { ...defender, revealed: isForest ? false : true }; if (attacker.owner === PLAYERS.RED) { rc.push(attacker); setRedCaptured(rc); } else { bc.push(attacker); setBlueCaptured(bc); } break;
-                case 'EQUAL_RANK': nb[fr][fc] = { ...selectedPiece, revealed: true }; nb[tr][tc] = { ...defender, revealed: true }; break;
+                case 'EQUAL_RANK': nb[fr][fc] = null; nb[tr][tc] = null; if (attacker.owner === PLAYERS.RED) { rc.push(attacker); setRedCaptured(rc); } else { bc.push(attacker); setBlueCaptured(bc); } if (defender.owner === PLAYERS.RED) { rc.push(defender); setRedCaptured(rc); } else { bc.push(defender); setBlueCaptured(bc); } break;
                 case 'BOTH_LOSE': nb[fr][fc] = null; nb[tr][tc] = null; if (attacker.owner === PLAYERS.RED) { rc.push(attacker); setRedCaptured(rc); } else { bc.push(attacker); setBlueCaptured(bc); } if (defender.owner === PLAYERS.RED) { rc.push(defender); setRedCaptured(rc); } else { bc.push(defender); setBlueCaptured(bc); } break;
                 case 'GAME_OVER': nb[fr][fc] = null; nb[tr][tc] = { ...attacker, revealed: true }; nw = attacker.owner; setWinner(nw); np = 'GAME_OVER'; setGamePhase('GAME_OVER'); confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); setStats(s => ({ ...s, gamesPlayed: s.gamesPlayed + 1, redWins: attacker.owner === PLAYERS.RED ? s.redWins + 1 : s.redWins, blueWins: attacker.owner === PLAYERS.BLUE ? s.blueWins + 1 : s.blueWins })); break;
             }
@@ -802,6 +834,9 @@ const App: React.FC = () => {
             return;
         }
         if (gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') {
+            // "Hazir"a basildi, dizilim kilitlendi — tahta uzerinde tas kaldirma
+            // ya da koyma artik yok sayilir (sunucu da setup_update'i reddediyor).
+            if (isWaitingOpponentSetup) return;
             const ap = (isOnlineMode && myOnlineTeam) ? myOnlineTeam : currentPlayer; if (!ap) return;
             const isRed = ap === PLAYERS.RED;
             // Dizilim alani SUTUN bazli: kirmizi 7-10, mavi 0-3.
@@ -834,6 +869,7 @@ const App: React.FC = () => {
     };
 
     const handleDragDrop = (source: any, target: Coords) => {
+        if (isWaitingOpponentSetup) return;
         if (!source || source.type !== 'BOARD_PIECE' || !(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE')) return;
         const ap = (isOnlineMode && myOnlineTeam) ? myOnlineTeam : currentPlayer; if (!ap) return;
         const sq = board[source.coords.row][source.coords.col]; if (!sq || typeof sq !== 'object' || sq.owner !== ap) return;
@@ -863,12 +899,15 @@ const App: React.FC = () => {
 
     const handleRestartGame = () => {
         if (isOnlineMode && wsRef.current?.readyState === WebSocket.OPEN && roomCode) { sendWsMessage({ type: 'request_restart', roomCode }); return; }
-        setBoard(createEmptyBoard(terrainRef.current.lakes)); setSelectedPiece(null); setValidMoves([]); setPiecesToPlace(createInitialPiecePool()); setSelectedPieceToPlace(null); setWinner(null); setRedCaptured([]); setBlueCaptured([]); setCombatHistory([]); setGamePhase('SETUP_RED'); setIsWaitingOpponentSetup(false); setTurnTimeRemaining(timerConfig.turnTime); setMissedTurns({ red: 0, blue: 0 }); setIsDraw(false); setRestartNotice(null);
+        setBoard(createEmptyBoard(terrainRef.current.lakes)); setSelectedPiece(null); setValidMoves([]); setPiecesToPlace(createInitialPiecePool()); setSelectedPieceToPlace(null); setWinner(null); setRedCaptured([]); setBlueCaptured([]); setCombatHistory([]); setGamePhase('SETUP_RED'); setIsWaitingOpponentSetup(false); setTurnTimeRemaining(timerConfig.turnTime); setMissedTurns({ red: 0, blue: 0 }); setIsDraw(false); setGameStartedAt(null); setGecenSure(0); setRestartNotice(null);
     };
 
     // Menude tahta ve panolar hic render edilmez; yalnizca OnlineModal erisilebilir kalir
     // cunku oda kurma/katilma akisi oradan yurutuluyor.
-    if (screen === 'MENU') {
+    // Gorseller hazir degilse de menuye takiliriz: oyun ekrani grafikler yuklenmeden
+    // acilmaz, yoksa kareler bos gorunur. Yukleme gizli oldugu icin kullanici bir
+    // "yukleniyor" gostergesi degil, menuyu gorur; hazir olunca oyun aninda acilir.
+    if (screen === 'MENU' || !oyunGorselleriHazir) {
         return (<>
             <MenuScreen lang={lang} onLanguageChange={setLang} onOpenOnline={() => setIsOnlineModalOpen(true)} onOpenSettings={() => setIsMenuSettingsOpen(true)} volume={volume} onVolumeChange={handleVolumeChange} />
             <MenuSettingsModal isOpen={isMenuSettingsOpen} onClose={() => setIsMenuSettingsOpen(false)} timerPreset={timerPreset} onPresetChange={handlePresetChange} lang={lang} />
@@ -925,7 +964,7 @@ const App: React.FC = () => {
             <PlayerPanel combatHistory={combatHistory} missedTurns={missedTurns} isOnlineMode={isOnlineMode} gecenSure={gecenSure} volume={volume} onVolumeChange={handleVolumeChange} lang={lang} />
         </main>
         <OnlineModal isOpen={isOnlineModalOpen} onClose={() => setIsOnlineModalOpen(false)} roomCode={roomCode} playerTeam={myOnlineTeam} roomState={roomState} onCreateRoom={handleCreateOnlineRoom} onJoinRoom={handleJoinOnlineRoom} onLeaveRoom={handleLeaveOnlineRoom} errorMessage={onlineErrorMessage} lang={lang} />
-        <RoomCodeModal isOpen={showRoomCode} roomCode={roomCode} onClose={() => setShowRoomCode(false)} lang={lang} />
+        <RoomCodeModal isOpen={showRoomCode} roomCode={roomCode} lang={lang} />
         {/* Oyun bittiginde bildirim GameOverModal'in ICINDE gosteriliyor; ayri bir popup
             ayni z-index'te ust uste binerdi. Diger tum durumlarda popup cikiyor. */}
         {/* Serit oyun sonu ekraninin ALTINDA kalir (z-900 < z-1000): oyun bittiginde

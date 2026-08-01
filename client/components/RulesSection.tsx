@@ -12,8 +12,8 @@ import { ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react';
 
 // Rutbe tablosu PIECE_DEFINITIONS'tan TURETILIYOR, elle yazilmiyor: rutbe veya
 // adet degistiginde (ki daha once degisti — Izci 4->2) bu liste kendiliginden
-// dogru kaliyor. Hareket edemeyen taslar (Bomba, Bayrak) ayri gruba aliniyor:
-// Bomba'nin ic rutbesi 11 ama bu bir SIRALAMA degeri degil, resolveCombat onu
+// dogru kaliyor. Hareket edemeyen taslar (Mayın, Sancak) ayri gruba aliniyor:
+// Mayın'in ic rutbesi 11 ama bu bir SIRALAMA degeri degil, resolveCombat onu
 // rutbe karsilastirmasindan once ozel dalda ele aliyor — tabloda 11 yazmak
 // "Mareşal'i yener" gibi yanlis bir izlenim verirdi.
 const HAREKETLI = Object.values(PIECE_DEFINITIONS)

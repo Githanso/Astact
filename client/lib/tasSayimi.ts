@@ -45,7 +45,6 @@ export const rakipKayiplari = (gecmis: CombatResult[], benimTakim: Player | null
     };
 
     for (const c of gecmis) {
-        // EQUAL_RANK'ta kimse olmuyor: iki tas da yasiyor, saldiran karesine donuyor.
         switch (c.outcome) {
             case 'ATTACKER_WINS':
                 if (c.defender?.owner !== benimTakim) ekle(c.defender?.name);
@@ -53,8 +52,14 @@ export const rakipKayiplari = (gecmis: CombatResult[], benimTakim: Player | null
             case 'DEFENDER_WINS':
                 if (c.attacker?.owner !== benimTakim) ekle(c.attacker?.name);
                 break;
+            // Eşit rütbe ve Mayın patlaması: İKİ taş da oyundan çıkıyor.
+            case 'EQUAL_RANK':
+            case 'BOTH_LOSE':
+                if (c.attacker?.owner !== benimTakim) ekle(c.attacker?.name);
+                if (c.defender?.owner !== benimTakim) ekle(c.defender?.name);
+                break;
             case 'GAME_OVER':
-                // Savunan Bayrak dustu.
+                // Savunan Sancak dustu.
                 if (c.defender?.owner !== benimTakim) ekle(c.defender?.name);
                 break;
         }

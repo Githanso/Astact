@@ -49,9 +49,9 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
     } catch { /* kod ekranda okunabilir durumda kaliyor */ }
   };
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    onCreateRoom(playerName.trim());   // bos birakilirsa her istemci kendi dilindeki yedegi gosterir
+  const handleCreate = () => {
+    if (!playerName.trim()) return;
+    onCreateRoom(playerName.trim());   // isim zorunlu; buton yalnizca doluysa aktif
   };
 
   const handleJoin = (e: React.FormEvent) => {
@@ -77,12 +77,14 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
               <p className="text-xs text-slate-400">{t.onlineSubtitle}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-800"
-          >
-            ✕
-          </button>
+          {!roomCode && activeTab === 'CREATE' && (
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-800"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Error Notification */}
@@ -190,65 +192,73 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
               </div>
             )}
 
-            {/* Leave Room Button */}
-            <button
-              onClick={onLeaveRoom}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 hover:border-rose-700/60 transition-all"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>{t.leaveRoom}</span>
-            </button>
+            {/* Leave Room Button — yalnizca rakip ODAYA GIRDIKTEN sonra; bekleme
+                ekraninda kodu gorup odadan kacilmasin diye gizli. */}
+            {roomState?.bluePresent && (
+              <button
+                onClick={onLeaveRoom}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 hover:border-rose-700/60 transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>{t.leaveRoom}</span>
+              </button>
+            )}
           </div>
         ) : (
-          /* Initial Tabs & Forms */
+          /* Initial Forms */
           <div className="space-y-4">
-            {/* Tab Switcher */}
-            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
-              <button
-                onClick={() => setActiveTab('CREATE')}
-                className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'CREATE'
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {t.createRoom}
-              </button>
-              <button
-                onClick={() => setActiveTab('JOIN')}
-                className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'JOIN'
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {t.joinRoom}
-              </button>
-            </div>
-
             {activeTab === 'CREATE' ? (
-              <form onSubmit={handleCreate} className="space-y-4 pt-2">
+              <>
+                {/* Oyuncu adi EN USTTE ve zorunlu; bosken butonlar kilitli */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">{t.playerNameOptional}</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">{t.playerName}</label>
                   <input
                     type="text"
                     placeholder={t.phNameRed}
                     value={playerName}
                     onChange={(e) => setPlayerName(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-700 text-sm text-slate-100 p-3 rounded-xl focus:outline-none focus:border-amber-400"
+                    autoFocus
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>{t.newRoomButton}</span>
-                </button>
-              </form>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                  <button
+                    onClick={handleCreate}
+                    disabled={!playerName.trim()}
+                    className={`py-2.5 px-3 text-xs font-black rounded-lg transition-all flex items-center justify-center gap-2 ${
+                      playerName.trim()
+                        ? 'bg-amber-500 text-slate-950 shadow-md active:scale-95'
+                        : 'bg-slate-900 text-slate-600 cursor-not-allowed'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{t.createRoom}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('JOIN')}
+                    disabled={!playerName.trim()}
+                    className={`py-2.5 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                      playerName.trim()
+                        ? 'text-slate-300 hover:bg-slate-800 hover:text-slate-100'
+                        : 'text-slate-600 cursor-not-allowed'
+                    }`}
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>{t.joinRoom}</span>
+                  </button>
+                </div>
+              </>
             ) : (
               <form onSubmit={handleJoin} className="space-y-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('CREATE')}
+                  className="text-[11px] font-bold text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+                >
+                  ← {t.goBack}
+                </button>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5">{t.roomCode}</label>
                   <input
@@ -257,27 +267,18 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
                     value={inputCode}
                     onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                     className="w-full bg-slate-950 border border-slate-700 text-sm font-mono tracking-widest text-amber-300 p-3 rounded-xl focus:outline-none focus:border-amber-400 uppercase"
+                    autoFocus
                     required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">{t.playerNameOptional}</label>
-                  <input
-                    type="text"
-                    placeholder={t.phNameBlue}
-                    value={playerName}
-                    onChange={(e) => setPlayerName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 text-sm text-slate-100 p-3 rounded-xl focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3 px-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-sm rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                  disabled={!inputCode.trim()}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-sm rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:from-sky-500 disabled:hover:to-blue-600"
                 >
                   <Send className="w-4 h-4" />
-                  <span>ODAYA KATIL</span>
+                  <span>{t.joinRoomButton}</span>
                 </button>
               </form>
             )}

@@ -24,11 +24,11 @@ function piece(id, name, rank, owner, row, col, opts = {}) {
 // Kirmizi Er, mavi bayragin HEMEN yaninda: tek hamlede FLAG galibiyeti alinabiliyor.
 // Kirmizi sola ilerler (dc<0), yani (0,1) -> (0,0) gecerli bir hamle.
 const RED = [
-  piece("r1", "Bayrak", 0, "1. Oyuncu", 0, 10, { movable: false }),
+  piece("r1", "Sancak", 0, "1. Oyuncu", 0, 10, { movable: false }),
   piece("r2", "Er", 2, "1. Oyuncu", 0, 1),
 ];
 const BLUE = [
-  piece("b1", "Bayrak", 0, "2. Oyuncu", 0, 0, { movable: false }),
+  piece("b1", "Sancak", 0, "2. Oyuncu", 0, 0, { movable: false }),
   piece("b2", "Er", 2, "2. Oyuncu", 3, 3),
 ];
 const BAYRAK_HAMLESI = { type: "move", from: { row: 0, col: 1 }, to: { row: 0, col: 0 } };
@@ -103,7 +103,7 @@ async function dizil(p1, p2, turnTime) {
 
 console.log(`Hedef: ${BASE}\n`);
 
-// ─── 1) Bayrakla biten oyundan yeniden baslatma ────────────────────────────
+// ─── 1) Sancakla biten oyundan yeniden baslatma ────────────────────────────
 console.log("=== 1) BAYRAK GALIBIYETI SONRASI YENIDEN BASLATMA ===");
 {
   const room = "TAK-" + Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -141,8 +141,8 @@ console.log("=== 1) BAYRAK GALIBIYETI SONRASI YENIDEN BASLATMA ===");
 
   // Tahta gercekten sifirlandi mi: alinan mavi bayrak yerinde duruyor olmali.
   const p2Baslangic = await waitFor(p2, "both_setup_complete", 3000);
-  const maviBayrak = p2Baslangic?.myPieces?.[0]?.[0];
-  check(maviBayrak?.name === "Bayrak", "alinan bayrak yeni oyunda geri geldi", `(${maviBayrak?.name ?? "yok"})`);
+  const maviSancak = p2Baslangic?.myPieces?.[0]?.[0];
+  check(maviSancak?.name === "Sancak", "alinan bayrak yeni oyunda geri geldi", `(${maviSancak?.name ?? "yok"})`);
 
   // Ve ikinci oyun da sonuna kadar oynanabiliyor (oda yasiyor).
   temizle(p1, p2);

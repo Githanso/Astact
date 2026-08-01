@@ -4,7 +4,7 @@
 //   1) Yon SERBEST: ileri, geri, saga, sola tek kare. Eskiden geri adim BACKWARD
 //      koduyla reddediliyordu (kirmizi icin dc>0, mavi icin dc<0).
 //   2) Oynayacak tasi kalmayan oyuncu KAYBEDER: son hareketli tasini yitirip
-//      elinde yalnizca Bomba/Bayrak kalan taraf icin oyun NO_MOVES ile biter.
+//      elinde yalnizca Mayın/Sancak kalan taraf icin oyun NO_MOVES ile biter.
 //      Eskiden oyun bitmiyor, kimse oynayamadigi halde masa acik kaliyordu.
 //
 // Taslar dogrudan setup_complete ile yerlestiriliyor; sunucu dizilim bolgesini
@@ -22,11 +22,11 @@ function piece(id, name, rank, owner, row, col, opts = {}) {
   return { id, name, rank, owner, special: opts.special ?? null, movable: opts.movable ?? true, position: { row, col } };
 }
 const RED = [
-  piece("r1", "Bayrak", 0, "1. Oyuncu", 0, 10, { movable: false }),
+  piece("r1", "Sancak", 0, "1. Oyuncu", 0, 10, { movable: false }),
   piece("r2", "Er", 2, "1. Oyuncu", 5, 7),
 ];
 const BLUE = [
-  piece("b1", "Bayrak", 0, "2. Oyuncu", 0, 0, { movable: false }),
+  piece("b1", "Sancak", 0, "2. Oyuncu", 0, 0, { movable: false }),
   piece("b2", "Mareşal", 10, "2. Oyuncu", 5, 9),
   piece("b3", "Er", 2, "2. Oyuncu", 9, 3),
 ];
@@ -105,7 +105,7 @@ check(!c1.ok && c1.hata?.code === "STRAIGHT_ONLY", "capraz hamle reddedildi", `(
 
 console.log("\n=== 5) son hareketli tasini yitiren KAYBEDER ===");
 // Kirmizinin Er'i (4,8) -> (4,9) -> (5,9)'daki Mareşal'e saldiriyor: Er oluyor ve
-// kirmizinin elinde yalnizca Bayrak kaliyor.
+// kirmizinin elinde yalnizca Sancak kaliyor.
 const a1 = await hamle(p1, { row: 4, col: 8 }, { row: 4, col: 9 });
 check(!!a1.ok, "kirmizi Mareşal'in yanina ilerledi (4,8 -> 4,9)", a1.ok ? "" : `<-- ${a1.hata?.code || "yanit yok"}`);
 await hamle(p2, { row: 9, col: 3 }, { row: 9, col: 2 });
