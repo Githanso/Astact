@@ -958,7 +958,13 @@ const App: React.FC = () => {
                         lang={lang}
                     />
                 )}
-                {(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && (
+                {/* showRoomCode aciksa dizilim panosu CIZILMEZ. Rakip henuz odaya
+                    girmediginden dizilecek bir sey yok, ustelik kod popup'i ile lobi
+                    perdesi 250ms'de aciliyor (animate-fade-in) — perde saydamken pano
+                    altta TAM PARLAKLIKTA goruluyor ve oda her kuruldugunda ceyrek
+                    saniyelik bir sicrama olarak goze carpiyordu. Panoyu perdenin
+                    opakligiyla ortmek yerine hic basmiyoruz. */}
+                {(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && !showRoomCode && (
                     <div className={`absolute top-1/2 -translate-y-1/2 z-30 w-72 max-w-[85%] ${setupSide === 'left' ? 'left-3' : 'right-3'}`}>
                         <SetupUI piecesToPlace={piecesToPlace} selectedPieceName={selectedPieceToPlace?.name} onPieceSelect={setSelectedPieceToPlace} onAutoSetup={handleAutoSetup} onClearSetup={handleClearSetup} onFinishSetup={handleReady} isWaitingOpponent={isWaitingOpponentSetup} lang={lang} player={setupPlayer} playerName={setupPlayerName} remainingSec={isOnlineMode ? setupTimeRemaining : null} />
                     </div>
