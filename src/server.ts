@@ -462,8 +462,12 @@ export class GameRoom extends DurableObject {
       // istege bagli oldugu icin adsiz girende null kaliyor. Ad uzerinden varlik
       // cikarilinca adsiz rakip "hic katilmamis" sayiliyordu.
       redPresent: !!r.players[0], bluePresent: !!r.players[1],
-      redPlayer: r.players[0]?.name || null, redConnected: connected.has(0) && r.disconnectedAt[0] === null, redReady: !!r.players[0]?.ready,
-      bluePlayer: r.players[1]?.name || null, blueConnected: connected.has(1) && r.disconnectedAt[1] === null, blueReady: !!r.players[1]?.ready,
+      // BOS SLOT ASLA "bagli" sayilmaz. Odadan ayrilan oyuncunun soketi bu yayin
+      // yapilirken hala getWebSockets() listesinde duruyor (istemci once leave_room
+      // yollayip sonra kapatiyor), bu yuzden yalnizca connected'a bakmak ayrilmis
+      // oyuncuyu "Cevrimici" gosteriyordu.
+      redPlayer: r.players[0]?.name || null, redConnected: !!r.players[0] && connected.has(0) && r.disconnectedAt[0] === null, redReady: !!r.players[0]?.ready,
+      bluePlayer: r.players[1]?.name || null, blueConnected: !!r.players[1] && connected.has(1) && r.disconnectedAt[1] === null, blueReady: !!r.players[1]?.ready,
       redDisconnectMs: kalan(0), blueDisconnectMs: kalan(1),
       disconnectTimeoutMs: DISCONNECT_TIMEOUT_MS,
       // Tur suresini oda kurucusu belirliyor; katilan oyuncu daha odaya girerken
@@ -990,9 +994,23 @@ export class GameRoom extends DurableObject {
             await this.ctx.storage.deleteAlarm();
             break;
           }
-          // Lobi veya dizilim: slot bosalir, oda LOBBY'ye doner, kalan oyuncu
-          // yeni rakip bekler. Dizilim saati de durur (tek basina kalan rastgele
-          // dizilmesin). Dizilimden donuste oda yeniden kullanilabilir.
+          // DIZILIMDE ayrilma: oda HERKES icin kapanir, kalan oyuncu da ana menuye
+          // (lobiye) doner. Eskiden slot bosalip oda LOBBY'ye donuyordu ve kalan
+          // oyuncu ayni kodla yeni rakip bekliyordu; ama o ekranda oyuncu "oyun
+          // baslayacak" sanip asili kaliyordu. Oyun sonundaki ayrilma ile ayni kural.
+          // Bedeli: oda kodu artik yeniden kullanilamaz, yeni oda kurulmasi gerekir.
+          if (room.gamePhase === "SETUP" && room.players[digerSlot]) {
+            room.players[playerSlot]!.left = true;
+            room.disconnectedAt[playerSlot] = null;
+            const digerWs = this.getWsBySlot(digerSlot);
+            if (digerWs && digerWs.readyState === WebSocket.OPEN) {
+              try { digerWs.send(JSON.stringify({ type: "room_closed" })); } catch (e) {}
+            }
+            await this.deleteRoom();
+            await this.ctx.storage.deleteAlarm();
+            break;
+          }
+          // Lobi (rakip henuz gelmemis): slot bosalir. Oda bosalirsa asagida silinir.
           room.players[playerSlot] = null;
           room.playerTokens[playerSlot] = null;
           room.disconnectedAt[playerSlot] = null;

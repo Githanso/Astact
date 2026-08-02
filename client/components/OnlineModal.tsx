@@ -132,19 +132,29 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
                   <Shield className="w-5 h-5 text-red-500" />
                   <div>
                     <div className="text-xs font-bold text-slate-200">
-                      {roomState?.redPlayer || t.playerRed}
+                      {/* Mavi satirdaki ile ayni kural: slot BOSSA "Bekleniyor".
+                          Eskiden kirmizi satirda redPresent hic sorulmuyordu — arayuz
+                          ev sahibinin her zaman odada oldugunu varsayiyordu. Ev sahibi
+                          dizilimde ayrilinca kalan misafir onu "Cevrimici" goruyordu. */}
+                      {roomState?.redPlayer || (roomState?.redPresent ? t.playerRed : t.statusWaiting)}
                       {playerTeam === '1. Oyuncu' && <span className="ml-1.5 text-[10px] text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/40">{t.youBadge}</span>}
                     </div>
                     <div className="text-[10px] text-slate-400">{t.teamRedUnit}</div>
                   </div>
                 </div>
-                {roomState?.redConnected ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> {t.onlineLabel}
-                  </span>
+                {roomState?.redPresent ? (
+                  roomState.redConnected ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> {t.onlineLabel}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                      <WifiOff className="w-3 h-3" /> {t.offlineLabel}
+                    </span>
+                  )
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
-                    <WifiOff className="w-3 h-3" /> {t.offlineLabel}
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-950/60 text-amber-400 border border-amber-800/40 animate-pulse">
+                    {t.statusWaiting}
                   </span>
                 )}
               </div>
@@ -181,8 +191,11 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
               </div>
             </div>
 
-            {/* Waiting Notice */}
-            {!roomState?.bluePresent ? (
+            {/* Waiting Notice — IKI slot da dolu olmali. Eskiden yalnizca bluePresent
+                sorulyordu, yani "kirmizi zaten burada" varsayiliyordu; ev sahibi
+                dizilimde ayrilinca kalan misafire "Iki oyuncu hazir! Dizilim ekranina
+                geciliyor..." yaziyor ve o ekranda sonsuza kadar bekletiyordu. */}
+            {!(roomState?.redPresent && roomState?.bluePresent) ? (
               <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-center text-xs text-amber-300 animate-pulse">
                 {t.waitingOpponentJoin}
               </div>
@@ -192,17 +205,19 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
               </div>
             )}
 
-            {/* Leave Room Button — yalnizca rakip ODAYA GIRDIKTEN sonra; bekleme
-                ekraninda kodu gorup odadan kacilmasin diye gizli. */}
-            {roomState?.bluePresent && (
-              <button
-                onClick={onLeaveRoom}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 hover:border-rose-700/60 transition-all"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>{t.leaveRoom}</span>
-              </button>
-            )}
+            {/* Leave Room Button — her zaman aciliyor. Once yalnizca bluePresent iken
+                gosteriliyordu ("bekleme ekraninda kodu gorup kacilmasin" diye); ama o
+                kosul rakibi ayrilip lobide tek kalan oyuncuyu da CIKISSIZ birakiyordu.
+                Oda kurulusundaki bekleme aninda zaten RoomCodeModal tum ekrani
+                kapatiyor, dolayisiyla bu dugmeye o an ulasilamiyor — gizlemeye gerek
+                yok, koruma perdeden geliyor. */}
+            <button
+              onClick={onLeaveRoom}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 hover:border-rose-700/60 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>{t.leaveRoom}</span>
+            </button>
           </div>
         ) : (
           /* Initial Forms */

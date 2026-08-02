@@ -6,8 +6,11 @@
 //   2) Karsi tarafa "baglantisi koptu" bildirimi GITMIYOR. Kasitli ayrilma ile
 //      kopma ayrisana kadar istemci yalnizca WS'i kapatiyordu, sunucu bunu kopma
 //      saniyor ve rakip 60sn boyunca yanlis uyariya bakiyordu.
-//   3) Dizilim asamasinda ayrilma = LOBİYE DÖNÜŞ: slot bosalir, oda LOBBY'ye
-//      doner, kalan oyuncu yeni rakip bekler (hukmen galibiyet YOK).
+//   3) Dizilim asamasinda ayrilma = ODA KAPANIR: kalan oyuncu room_closed alip
+//      ana menuye (lobiye) doner, hukmen galibiyet YOK. Oda kodu tek seferlik
+//      oldugu icin ayni kodla yeniden girilemez.
+//      (Eskiden slot bosalir, oda LOBBY'ye doner ve ayni kodla yeni rakip
+//      beklenirdi; kalan oyuncu o ekranda "oyun baslayacak" sanip asili kaliyordu.)
 //
 //   node oda-terk-testi.mjs
 //   ASTACT_WS=wss://astact.hasanso.workers.dev/ws/game-room node oda-terk-testi.mjs
@@ -101,25 +104,21 @@ await sleep(800);
 const setupFazi = q1.messages.find((m) => m.roomState?.gamePhase === "SETUP");
 check(!!setupFazi, "oda dizilim fazina gecti");
 
-// Dizilimde ayrilma = LOBİYE DÖNÜŞ: slot bosalir, oda LOBBY'ye doner.
+// Dizilimde ayrilma = ODA KAPANIR: kalan oyuncu room_closed alip ana menuye doner.
 q1.messages.length = 0;
 q2.send(JSON.stringify({ type: "leave_room" }));
 await sleep(100);
 q2.close();
-const pcc = await waitFor(q1, "player_connection_change", 4000);
-check(!!pcc, "kalan oyuncu durum guncellemesi aldi");
-check(pcc?.roomState?.gamePhase === "LOBBY", "oda LOBBY'ye dondu (lobiye donus)", `(${pcc?.roomState?.gamePhase})`);
-check(pcc?.roomState?.bluePresent === false, "ayrilan oyuncunun slotu bosaldi", `(bluePresent=${pcc?.roomState?.bluePresent})`);
-check(pcc?.roomState?.setupRemainingMs === null, "dizilim saati durdu (tek basina rastgele dizilme yok)", `(${pcc?.roomState?.setupRemainingMs})`);
+const kapandi = await waitFor(q1, "room_closed", 4000);
+check(!!kapandi, "kalan oyuncu room_closed aldi (ana menuye doner)");
 await sleep(500);
 const hukmen = q1.messages.find((m) => m.type === "game_over");
 check(!hukmen, "HUKMEN GALIBIYET YOK (kalan oyuncuya game_over gelmedi)", hukmen ? "<-- geldi" : "");
 
-// Yeni rakip AYNI KODLA katilabilir: oda tekrar SETUP'a doner, dizilim yeniden baslar.
+// Kod TEK SEFERLIK: kapanan odaya ayni kodla yeniden girilemez.
 const q3 = await connect(oda2, "Oyuncu3", "u3-" + tok, "Q3");
-await sleep(600);
-const setupFaz2 = q1.messages.find((m) => m.roomState?.gamePhase === "SETUP");
-check(!!setupFaz2, "yeni rakip ayni kodla katildi, oda yeniden SETUP", setupFaz2 ? `(faz=${setupFaz2.roomState?.gamePhase})` : "");
+const red = await waitFor(q3, "room_error", 4000);
+check(red?.code === "ROOM_CLOSED", "ayni kodla yeniden girilemiyor (ROOM_CLOSED)", `(kod=${red?.code})`);
 q3.close();
 
 console.log(`\n=== SONUC: ${fails === 0 ? "TUM KONTROLLER GECTI" : fails + " KONTROL KALDI"} ===`);
