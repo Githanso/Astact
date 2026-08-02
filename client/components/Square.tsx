@@ -50,18 +50,33 @@ const Square: React.FC<SquareProps> = ({
     let content = null;
     const activeViewPlayer = perspectivePlayer || currentPlayer;
 
+    // Surukle-birak YALNIZCA dizilim asamasinda. App, oyun basladiginda (ve dizilim
+    // kilitlendiginde) onDropAction'i hic gecmiyor; buradaki tek bayrak hem tasin
+    // draggable'ini hem hedef vurgusunu kapatiyor. Aksi halde oyun sirasinda tas
+    // suruklenebiliyor, vurgu yanip sonuyor ama birakma hicbir sey yapmiyordu.
+    const surukleAktif = !!onDropAction;
+
     const handleDragStart = (e: React.DragEvent) => {
         e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'BOARD_PIECE', coords }));
         e.dataTransfer.effectAllowed = 'move';
     };
 
     const handleDragOver = (e: React.DragEvent) => {
+        if (!surukleAktif) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
     };
 
+    // Surukleme hedefi vurgusu. dragenter/dragleave COCUK elemanlarda da tetikleniyor
+    // (tas gorseli, rozet), bu yuzden sayac tutuluyor: yalnizca kareye giris/cikis
+    // sayilsin. Tek bir boolean ile tasin uzerinden gecerken vurgu sonup yanardi.
+    const [dragDerinlik, setDragDerinlik] = React.useState(0);
+    const handleDragEnter = () => { if (surukleAktif) setDragDerinlik(d => d + 1); };
+    const handleDragLeave = () => { if (surukleAktif) setDragDerinlik(d => Math.max(0, d - 1)); };
+
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
+        setDragDerinlik(0);
         if (!onDropAction) return;
         try {
             const raw = e.dataTransfer.getData('text/plain');
@@ -90,7 +105,7 @@ const Square: React.FC<SquareProps> = ({
                         lang={lang}
                         piece={squareData}
                         isOpponent={squareData.owner !== activeViewPlayer}
-                        onDragStart={handleDragStart}
+                        onDragStart={surukleAktif ? handleDragStart : undefined}
                         dimmed={isDimmed}
                     />
                 </div>
@@ -107,6 +122,8 @@ const Square: React.FC<SquareProps> = ({
             className={`relative w-full h-full cursor-pointer group border border-slate-700/30 bg-slate-900 transition-all duration-150 select-none${isCombatSquare ? ' combat-shake' : ''}`}
             onClick={() => onClick(coords)}
             onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
             {/* Zemin dokusu: public/assets/floor.avif. Satranc deseni karartma
@@ -137,6 +154,13 @@ const Square: React.FC<SquareProps> = ({
             
             {isSelectedHighlight && (
                 <div className="absolute inset-0 ring-4 ring-amber-300 bg-amber-500/20 z-30 pointer-events-none animate-pulse"></div>
+            )}
+
+            {/* Surukleme hedefi. Kehribar (secim/hamle) ve camgobegi (Izci) zaten
+                ayrilmis; bu yuzden MENEKSE. Yalnizca dizilimde gorunuyor, oyun
+                sirasinda o vurgularla ayni anda cikma ihtimali yok. */}
+            {dragDerinlik > 0 && (
+                <div className="absolute inset-0 ring-2 ring-violet-300 bg-violet-400/25 z-40 pointer-events-none"></div>
             )}
 
             {/* Izci hedefi: hamle isaretleri kehribar, bu CAMGOBEGI. Ayni renkte

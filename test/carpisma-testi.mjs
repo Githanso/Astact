@@ -161,12 +161,12 @@ let ACIK_SALDIRAN, ACIK_HEDEF, ORMAN_SALDIRAN, ORMAN_HEDEF;
 console.log("=== 1) YUKSEK RUTBE ALCAGI YENER (acik alan) ===");
 {
   const { p1, p2 } = await kur(
-    [KB, kirmizi("r1", "Çavuş", 5, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
+    [KB, kirmizi("r1", "Teğmen", 5, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
     [MB, mavi("m1", "Er", 2, ACIK_HEDEF.row, ACIK_HEDEF.col)]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
   check(m1?.combatResult?.outcome === "ATTACKER_WINS", "rutbe 5 > rutbe 2, saldiran kazandi", `(${m1?.combatResult?.outcome})`);
   check(m1?.combatResult?.defenderName === "Er", "saldiran, yendigi tasi ogrendi", `(${m1?.combatResult?.defenderName})`);
-  check(m2?.combatResult?.attackerName === "Çavuş" && m2?.combatResult?.attackerRank === 5,
+  check(m2?.combatResult?.attackerName === "Teğmen" && m2?.combatResult?.attackerRank === 5,
         "acik alanda kazanan saldiran ACIGA CIKTI", `(${m2?.combatResult?.attackerName}/${m2?.combatResult?.attackerRank})`);
   // Kimin oynadigi gizli bilgi degil (tahtada zaten gorunuyor); istemci carpisma
   // gecmisinde taslari buna gore renklendiriyor.
@@ -261,8 +261,8 @@ console.log("\n=== 6) MARESAL SALDIRIRSA BILE CASUS KAZANIR ===");
 console.log("\n=== 7) ESIT RUTBE: IKISI DE OLUR ===");
 {
   const { p1, p2 } = await kur(
-    [KB, kirmizi("r1", "Teğmen", 4, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
-    [MB, mavi("m1", "Teğmen", 4, ACIK_HEDEF.row, ACIK_HEDEF.col)]);
+    [KB, kirmizi("r1", "Çavuş", 4, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
+    [MB, mavi("m1", "Çavuş", 4, ACIK_HEDEF.row, ACIK_HEDEF.col)]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
   check(m1?.combatResult?.outcome === "EQUAL_RANK", "esit rutbe bildirildi", `(${m1?.combatResult?.outcome})`);
   check(bos(m1?.myBoard?.[ACIK_SALDIRAN.row]?.[ACIK_SALDIRAN.col]), "saldiran da tahtadan kalkti");
@@ -278,11 +278,11 @@ console.log("\n=== 7) ESIT RUTBE: IKISI DE OLUR ===");
 console.log("\n=== 8) ORMANDA KAZANAN SALDIRAN GIZLI KALIR ===");
 {
   const { p1, p2 } = await kur(
-    [KB, kirmizi("r1", "Çavuş", 5, ORMAN_SALDIRAN.row, ORMAN_SALDIRAN.col)],
+    [KB, kirmizi("r1", "Teğmen", 5, ORMAN_SALDIRAN.row, ORMAN_SALDIRAN.col)],
     [MB, mavi("m1", "Er", 2, ORMAN_HEDEF.row, ORMAN_HEDEF.col)]);
   const { m1, m2 } = await hamle(p1, p2, p1, ORMAN_SALDIRAN, ORMAN_HEDEF);
   check(m1?.combatResult?.outcome === "ATTACKER_WINS", "saldiran kazandi", `(${m1?.combatResult?.outcome})`);
-  check(m1?.combatResult?.attackerName === "Çavuş", "saldiran KENDI tasini gormeye devam ediyor", `(${m1?.combatResult?.attackerName})`);
+  check(m1?.combatResult?.attackerName === "Teğmen", "saldiran KENDI tasini gormeye devam ediyor", `(${m1?.combatResult?.attackerName})`);
   check(m2?.combatResult?.attackerName === null && m2?.combatResult?.attackerRank === null,
         "rakip saldiranin kim oldugunu OGRENEMEDI",
         `(${m2?.combatResult?.attackerName}/${m2?.combatResult?.attackerRank})`);

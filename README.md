@@ -871,6 +871,13 @@ ve `DEFENDER_WINS` dallarında kazanan orman karesindeyse gizli kalıyor (`isFor
 `server.ts:603-604`), ama `EQUAL_RANK` dalında böyle bir kontrol yok — ormanda da ikisi
 açılıyor. Değiştirilmedi.
 
+> **Sonradan geçersiz kaldı.** Bu bölümdeki davranışın ikisi de artık geçerli değil.
+> `EQUAL_RANK` sonradan klasik Stratego'ya çevrildi: eşit rütbede **iki taş da tahtadan
+> kalkıyor** (`server.ts:828`), saldıran geri dönmüyor. Orman kontrolü de eklendi — ormanda
+> savunanın kimliği gizli kalıyor, yalnızca saldıran açılıyor. Kod değiştiğinde kural metni
+> güncellenmemişti; `ruleEqual` dört dilde de hâlâ "iki taş da yaşar, saldıran kendi
+> karesine döner" diyordu. Metin şimdi düzeltildi (`client/constants.ts:279, 410, 540, 670`).
+
 ### Menüdeki Ayarlar penceresi
 
 `MenuSettingsModal.tsx` — içerik bilinçli olarak **oyun öncesi anlamlı** olanlarla sınırlı:
@@ -1606,7 +1613,7 @@ hepsi geçiyor). `resolveCombat` oyunun kalbi ama bugüne kadar otomatik testi y
 - Bomba üzerine gelen normal taşı yok eder, kendisi sabit kalır
 - İstihkamcı (MINER) rütbesi 1 olmasına rağmen Bombayı imha edip kareye geçer
 - Casus **saldırdığında** Mareşal'i alır; Mareşal saldırdığında Casus ölür (kural tek yönlü)
-- eşit rütbede ikisi de yaşar, saldıran eski karesine döner, ikisi de açığa çıkar
+- eşit rütbede ikisi de tahtadan kalkar, açık alanda ikisi de açığa çıkar
 - Bayrak alınınca `GAME_OVER` + `reason: FLAG` iki tarafa da ulaşır
 
 Sızıntı tarafı ayrı ölçülüyor, çünkü çarpışma sonucu her oyuncu için **ayrı** kurgulanıyor

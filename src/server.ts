@@ -271,8 +271,9 @@ const SUNUCU_TAS_TANIMLARI: Record<string, { rank: number; special: string | nul
   "Albay": { rank: 8, special: null, movable: true },
   "Binbaşı": { rank: 7, special: null, movable: true },
   "Yüzbaşı": { rank: 6, special: null, movable: true },
-  "Çavuş": { rank: 5, special: null, movable: true },
-  "Teğmen": { rank: 4, special: null, movable: true },
+  // Teğmen SUBAY, Çavuş erbastir — Tegmen ustundur (eskiden ters idi).
+  "Teğmen": { rank: 5, special: null, movable: true },
+  "Çavuş": { rank: 4, special: null, movable: true },
   "Onbaşı": { rank: 3, special: null, movable: true },
   "Er": { rank: 2, special: null, movable: true },
   "Keşifçi": { rank: 2, special: "SCOUT", movable: true },
@@ -283,7 +284,9 @@ const SUNUCU_TAS_TANIMLARI: Record<string, { rank: number; special: string | nul
 };
 const SUNUCU_TAS_SAYILARI: Record<string, number> = {
   "Mareşal": 1, "General": 1, "Albay": 2, "Binbaşı": 3, "Yüzbaşı": 4,
-  "Çavuş": 4, "Teğmen": 4, "Onbaşı": 4, "Er": 4,
+  // Er 3 (4 degil): toplam 41 idi, dizilim alani 40 kare — fazla tas her oyunda
+  // sessizce dusuyordu. Istemcideki PIECE_COUNTS ile BIREBIR ayni kalmali.
+  "Teğmen": 4, "Çavuş": 4, "Onbaşı": 4, "Er": 3,
   "Keşifçi": 2, "İstihkamcı": 5, "Casus": 1, "Mayın": 5, "Sancak": 1,
 };
 

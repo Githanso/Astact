@@ -10,3 +10,7 @@ dist/
 public/index.html
 public/assets/index-*.js
 public/assets/index-*.css
+
+# Yerel yardimci script'ler: yalnizca gelistirme makinesinde durur, repoya
+# girmez (ASTACT-Github-gonder.bat, ASTACT- Cloudflare-Deploy.bat gibi).
+*.bat

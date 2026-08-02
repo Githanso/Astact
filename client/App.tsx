@@ -502,7 +502,10 @@ const App: React.FC = () => {
         if (!isOnlineMode || !myOnlineTeam || !roomCode || wsRef.current?.readyState !== WebSocket.OPEN) return;
         const isRed = myOnlineTeam === PLAYERS.RED; const cols = isRed ? [7, 8, 9, 10] : [0, 1, 2, 3];
         const placedPieces: PlacedPiece[] = [];
-        for (const c of cols) for (let r = 0; r < BOARD_ROWS; r++) { const s = tahta[r][c]; if (s && typeof s === 'object' && s.owner === myOnlineTeam) placedPieces.push(s); }
+        // position TAHTADAN turetiliyor, tasin uzerindeki alana guvenilmiyor: sunucu
+        // konumu position'dan okuyor (server.ts taslaraCevir) ve ikisi ayrisirsa iki
+        // tas ayni koordinatla gidip biri kayboluyor. Tek gercek kaynak tahta dizisi.
+        for (const c of cols) for (let r = 0; r < BOARD_ROWS; r++) { const s = tahta[r][c]; if (s && typeof s === 'object' && s.owner === myOnlineTeam) placedPieces.push({ ...s, position: { row: r, col: c } }); }
         sendWsMessage({ type: 'setup_update', roomCode, team: myOnlineTeam, placedPieces });
     };
 
@@ -882,22 +885,57 @@ const App: React.FC = () => {
         const cs = board[coords.row][coords.col]; if (cs && typeof cs === 'object' && cs.owner === currentPlayer) { setSelectedPiece(cs); setValidMoves(calculateValidMoves(cs, board)); } else { setSelectedPiece(null); setValidMoves([]); }
     };
 
+    // Surukle-birak yalnizca burada acik: dizilim fazi VE "Hazir" denmemis olmasi.
+    // Hem Board'a onDropAction gecilip gecilmeyecegini hem asagidaki fonksiyonun
+    // kapisini bu belirliyor — ikisi ayrisirsa oyun sirasinda tas suruklenebilir hale
+    // gelir (birakma yine islemez ama kullaniciya "calisiyor" izlenimi verir).
+    const dizilimAsamasi = (gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && !isWaitingOpponentSetup;
+
     const handleDragDrop = (source: any, target: Coords) => {
-        if (isWaitingOpponentSetup) return;
-        if (!source || source.type !== 'BOARD_PIECE' || !(gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE')) return;
+        if (!source || !dizilimAsamasi) return;
         const ap = (isOnlineMode && myOnlineTeam) ? myOnlineTeam : currentPlayer; if (!ap) return;
-        const sq = board[source.coords.row][source.coords.col]; if (!sq || typeof sq !== 'object' || sq.owner !== ap) return;
         // Dizilim alani SUTUN bazli: kirmizi 7-10, mavi 0-3. (Tahta 10 satir x 11 sutun.)
         const isRed = ap === PLAYERS.RED; const zone = isRed ? { start: 7, end: 10 } : { start: 0, end: 3 };
         if (target.col < zone.start || target.col > zone.end) return;
-        const ts = board[target.row][target.col]; if (ts === null || ts === 'FOREST') { const nb = board.map(r => [...r]); nb[target.row][target.col] = sq; nb[source.coords.row][source.coords.col] = null; setBoard(nb); gonderKismiDizilim(nb); }
+
+        // HAVUZDAN surukleme (SetupUI). Eskiden bu tip sessizce reddediliyordu:
+        // surukleme yalnizca onPieceSelect sayesinde tasi SECMIS oluyor, birakma
+        // hicbir sey yapmiyordu. Yerlestirmeyi tiklama yolunun kullandigi fonksiyon
+        // yapiyor — mantik kopyalanmiyor.
+        if (source.type === 'SETUP_PIECE') { handlePiecePlacement(target); return; }
+
+        if (source.type !== 'BOARD_PIECE') return;
+        // Tasi kendi karesine birakma: is yok ama setBoard + sunucuya setup_update
+        // giderdi. Kisa yoldan cikiliyor.
+        if (source.coords.row === target.row && source.coords.col === target.col) return;
+        const sq = board[source.coords.row][source.coords.col]; if (!sq || typeof sq !== 'object' || sq.owner !== ap) return;
+        const ts = board[target.row][target.col];
+        const nb = board.map(r => [...r]);
+        // position SART: sunucu tasin yerini tahtadaki karesinden degil, tasin
+        // ustundeki position alanindan okuyor (server.ts taslaraCevir). Guncellenmezse
+        // tasinan tas eski koordinatini tasimaya devam eder; o kareye sonradan baska
+        // bir tas konunca IKISI AYNI koordinatla gider ve sunucuda biri digerinin
+        // ustune yazilir — tahtada 40 yerine 39 tas kalir.
+        const konumla = (p: PlacedPiece, row: number, col: number): PlacedPiece => ({ ...p, position: { row, col } });
+        if (ts === null || ts === 'FOREST') {
+            nb[target.row][target.col] = konumla(sq, target.row, target.col);
+            nb[source.coords.row][source.coords.col] = null;
+        } else if (typeof ts === 'object' && ts.owner === ap) {
+            // TAKAS. Bu dal olmadan "Rastgele Diz" sonrasi surukle-birak tamamen
+            // islevsizdi: dizilim alani 4 sutun x 10 satir = 40 kare ve oyuncunun
+            // tam 40 tasi var, yani bos kare kalmiyor.
+            nb[target.row][target.col] = konumla(sq, target.row, target.col);
+            nb[source.coords.row][source.coords.col] = konumla(ts, source.coords.row, source.coords.col);
+        } else return;   // rakip tasi ya da beklenmeyen icerik
+        setBoard(nb); gonderKismiDizilim(nb);
     };
 
     const handleReady = () => {
         const ap = (isOnlineMode && myOnlineTeam) ? myOnlineTeam : currentPlayer; if (!ap) return;
         if (isOnlineMode && wsRef.current?.readyState === WebSocket.OPEN && roomCode && myOnlineTeam) {
             const placedPieces: PlacedPiece[] = []; const isRed = myOnlineTeam === PLAYERS.RED; const cols = isRed ? [7, 8, 9, 10] : [0, 1, 2, 3];
-            for (const c of cols) for (let r = 0; r < BOARD_ROWS; r++) { const s = board[r][c]; if (s && typeof s === 'object' && s.owner === myOnlineTeam) placedPieces.push(s); }
+            // position tahtadan turetiliyor — bkz. gonderKismiDizilim'deki ayni not.
+            for (const c of cols) for (let r = 0; r < BOARD_ROWS; r++) { const s = board[r][c]; if (s && typeof s === 'object' && s.owner === myOnlineTeam) placedPieces.push({ ...s, position: { row: r, col: c } }); }
             // turnTime'i sunucu tur saatini kurarken kullanir; oda kurucusununki gecerli olur.
             sendWsMessage({ type: 'setup_complete', roomCode, team: myOnlineTeam, placedPieces, turnTime: timerConfig.turnTime }); setIsWaitingOpponentSetup(true); return;
         }
@@ -964,7 +1002,12 @@ const App: React.FC = () => {
         />
         <main className="flex-1 flex items-start justify-center gap-4 p-2 md:p-4 max-w-7xl mx-auto w-full">
             <div className={`relative flex-grow w-full flex items-center justify-center ${tahtaGenislikSiniri}`}>
-                <Board board={board} onSquareClick={handleSquareClick} onDropAction={handleDragDrop} highlightedPiece={selectedPiece} validMoves={validMoves} currentPlayer={currentPlayer} perspectivePlayer={isOnlineMode ? myOnlineTeam : currentPlayer} lastCombatCoords={lastCombatCoords} lastMove={lastMove} scoutTargets={scoutTargets} forests={terrain.forests} lang={lang} />
+                {/* onDropAction YALNIZCA dizilim asamasinda geciliyor. Oyun basladiktan
+                    sonra (ve "Hazir"la dizilim kilitlendikten sonra) undefined kalir;
+                    Square bunu tek bayrak olarak okuyup hem tasin draggable'ini hem
+                    surukleme vurgusunu kapatiyor. Yoksa oyun sirasinda tas surukleniyor,
+                    kare vurgulaniyor ama birakma hicbir sey yapmiyordu. */}
+                <Board board={board} onSquareClick={handleSquareClick} onDropAction={dizilimAsamasi ? handleDragDrop : undefined} highlightedPiece={selectedPiece} validMoves={validMoves} currentPlayer={currentPlayer} perspectivePlayer={isOnlineMode ? myOnlineTeam : currentPlayer} lastCombatCoords={lastCombatCoords} lastMove={lastMove} scoutTargets={scoutTargets} forests={terrain.forests} lang={lang} />
                 {secimSayaci && (
                     <PieceCountChip
                         pieceName={secimSayaci.ad}

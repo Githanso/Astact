@@ -38,8 +38,10 @@ export const PIECE_DEFINITIONS: { [key: string]: Omit<PieceDefinition, 'count'> 
   'Albay': { name: 'Albay', rank: 8, special: null, movable: true },
   'Binbaşı': { name: 'Binbaşı', rank: 7, special: null, movable: true },
   'Yüzbaşı': { name: 'Yüzbaşı', rank: 6, special: null, movable: true },
-  'Çavuş': { name: 'Çavuş', rank: 5, special: null, movable: true },
-  'Teğmen': { name: 'Teğmen', rank: 4, special: null, movable: true },
+  // Teğmen SUBAY, Çavuş erbastir: TSK hiyerarsisinde Tegmen ustundur.
+  // Eskiden ters girilmisti (Çavuş 5 / Teğmen 4).
+  'Teğmen': { name: 'Teğmen', rank: 5, special: null, movable: true },
+  'Çavuş': { name: 'Çavuş', rank: 4, special: null, movable: true },
   'Onbaşı': { name: 'Onbaşı', rank: 3, special: null, movable: true },
   'Er': { name: 'Er', rank: 2, special: null, movable: true },
   'Keşifçi': { name: 'Keşifçi', rank: 2, special: SpecialAbility.SCOUT, movable: true },
@@ -85,6 +87,33 @@ export const PIECE_LABELS: Record<Language, Record<string, string>> = {
 export const getPieceLabel = (name: string, lang: Language): string =>
   PIECE_LABELS[lang]?.[name] ?? PIECE_LABELS.TR[name] ?? name;
 
+// Karakter gorselleri: public/assets/characters/*.svg. Dosya adlari ASCII, tas
+// adlari Turkce — bu yuzden ACIK bir tablo tutuluyor. Ad uretmeye calismak
+// (toLowerCase + aksan atma) 'İstihkamcı' -> 'i̇stihkamci' gibi tuzaklara dusuyor.
+// Gorseller BUNDLE'A GOMULMUYOR: 14 dosya, 21-70 KB. public/ altindan servis
+// ediliyorlar (wrangler.toml -> directory = "./public"), tarayici bir kez indirip
+// 80 tasin tamaminda yeniden kullaniyor.
+export const PIECE_ART: Record<string, string> = {
+  'Mareşal': 'maresal', 'General': 'general', 'Albay': 'albay', 'Binbaşı': 'binbasi',
+  'Yüzbaşı': 'yuzbasi', 'Teğmen': 'tegmen', 'Çavuş': 'cavus', 'Onbaşı': 'onbasi',
+  'Er': 'er', 'Keşifçi': 'kesifci', 'İstihkamcı': 'istihkamci', 'Casus': 'casus',
+  'Mayın': 'mayin', 'Sancak': 'sancak',
+};
+
+/** Tasin karakter gorselinin yolu. Bilinmeyen ad gelirse null. */
+export const getPieceArt = (name: string): string | null =>
+  PIECE_ART[name] ? `/assets/characters/${PIECE_ART[name]}.svg` : null;
+
+// GECICI — tas stili denemesi. Varsayilan 'sade': taraf arka plani hic yok, figur
+// kareyi maksimum dolduruyor, taraf rengi yalnizca alttaki rutbe rozetinde.
+// ?stil=disk ile onceki taban diski varyanti karsilastirma icin duruyor.
+// ('gradyan' elendi: saydamlastigi bolge tasin zaten bos kismiydi, zemini acmadi.)
+// Karar verilince bu sabit ve kaybeden varyant Piece.tsx'ten birlikte silinecek.
+export const TAS_STILI: 'sade' | 'disk' =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).get('stil') === 'disk'
+    ? 'disk'
+    : 'sade';
+
 // Oyuncu basina TAM 40 tas — dizilim alani 4 sutun x 10 satir = 40 kare, bosluk
 // birakmiyor. Bu tablonun toplami DEGISMEMELI; bir tasi artirirken digerini
 // azaltmak sart.
@@ -94,10 +123,15 @@ export const PIECE_COUNTS: { [key: string]: number } = {
   'Albay': 2,
   'Binbaşı': 3,
   'Yüzbaşı': 4,
-  'Çavuş': 4,
   'Teğmen': 4,
+  'Çavuş': 4,
   'Onbaşı': 4,
-  'Er': 4,
+  // Er 3: tablo bir ara 41'e cikmis, dizilim alani ise 40 kare. Fazla tas her
+  // oyunda sessizce dusuyordu (rastgele dizilim 40 kareyi doldurup kalani atiyor,
+  // hangi tasin dustugu karistirma sirasina bagli) — "bir tasim eksik" hatasi
+  // buradan geliyordu. Ozel yetenekli taslarin dengesine dokunmamak icin fazlalik
+  // en jenerik piyadeden alindi.
+  'Er': 3,
   // Izci sayisi 2: artik siradan bir tas degil, ISTIHBARAT kaynagi. Ilk kullanim
   // bedava, sonrasi SCOUT_COOLDOWN turluk bekleme (bkz. server.ts "scout").
   'Keşifçi': 2,
@@ -223,7 +257,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     playerStatuses: 'Oyuncu Durumları', liveLabel: 'Canlı',
     onlineLabel: 'Çevrimiçi', offlineLabel: 'Çevrimdışı',
     teamRedUnit: '1. Birlik (Ev Sahibi)', teamBlueUnit: '2. Birlik (Misafir)',
-    waitingOpponentJoin: '⏳ Rakibinizin odaya katılması bekleniyor. Katıldığı an dizilime başlanacaktır.',
+    waitingOpponentJoin: '⏳ Rakibiniz odaya katıldığı an dizilime başlanacaktır.',
     bothReadyGoSetup: '⚔️ İki oyuncu hazır! Dizilim ekranına geçiliyor...',
     leaveRoom: 'Odayı Terk Et', returnToLobby: 'Lobiye Dön', playerName: 'Oyuncu Adınız', goBack: 'Geri git',
     phNameRed: 'Örn. Komutan Kırmızı', phRoomCode: 'Örn. TAK-8492',
@@ -265,7 +299,8 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     youDisconnectedWait: 'Yeniden bağlanılıyor — {n} sn içinde dönmezsen oyunu kaybedersin.',
     youReconnected: 'Yeniden bağlandın.',
     // Kurallar bolumu. Metinler koddaki gercek davranistan turetildi:
-    // resolveCombat (server.ts:394), hamle dogrulamasi (server.ts:585-590),
+    // resolveCombat (server.ts:556), carpisma sonucunun uygulanmasi
+    // (server.ts:821-830), hamle dogrulamasi (server.ts:800-811),
     // SCOUT_COOLDOWN ve MAX_MISSED_TURNS. Kural degisirse burasi da degismeli.
     rulesTitle: 'Rütbe Hiyerarşisi & Özel Kurallar',
     rulesRanksTitle: 'Rütbeler',
@@ -276,7 +311,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     ruleSpy: 'Casus, Mareşal\'i her koşulda yener — saldırsın ya da savunsun.',
     ruleMiner: 'İstihkamcı, Mayın\'ı imha edip kareye geçer. Diğer taşlar Mayın\'a çarpınca ölür.',
     ruleScout: 'Keşifçi, aynı satırdaki bir düşman taşının kimliğini açar. Görev tur harcar; ilk kullanım bedava, sonrası {n} tur bekleme.',
-    ruleEqual: 'Eşit rütbede kimse kazanmaz: iki taş da yaşar, saldıran kendi karesine döner ve ikisinin de kimliği açığa çıkar.',
+    ruleEqual: 'Eşit rütbede kimse kazanmaz: iki taş da oyundan çıkar ve ikisinin de kimliği açığa çıkar.',
     ruleMove: 'Taşlar tek kare, düz hareket eder; ileri, geri ve yana serbesttir.',
     ruleLake: 'Göl geçilemez ve Keşifçi\'nin görüşünü keser.',
     ruleForest: 'Ormanda çarpışmayı kazanan taş gizli kalır; ormandaki taşın kimliği Keşifçi ile görülemez.',
@@ -356,7 +391,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     playerStatuses: 'Player Status', liveLabel: 'Live',
     onlineLabel: 'Online', offlineLabel: 'Offline',
     teamRedUnit: '1st Unit (Host)', teamBlueUnit: '2nd Unit (Guest)',
-    waitingOpponentJoin: '⏳ Waiting for your opponent to join. Setup begins the moment they do.',
+    waitingOpponentJoin: '⏳ Setup begins the moment your opponent joins the room.',
     bothReadyGoSetup: '⚔️ Both players ready! Moving to the setup screen...',
     leaveRoom: 'Leave Room', returnToLobby: 'Return to Lobby', playerName: 'Your Name', goBack: 'Go Back',
     phNameRed: 'e.g. Red Commander', phRoomCode: 'e.g. TAK-8492',
@@ -406,7 +441,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     ruleSpy: 'The Spy beats the Marshal under all circumstances — whether attacking or defending.',
     ruleMiner: 'The Miner defuses the Mine and takes its square. Any other piece that hits a Mine dies.',
     ruleScout: 'The Scout reveals the identity of an enemy piece on its own row. The mission costs a turn; the first use is free, then a {n}-turn cooldown.',
-    ruleEqual: 'On equal rank nobody wins: both pieces survive, the attacker returns to its own square and both identities are revealed.',
+    ruleEqual: 'On equal rank nobody wins: both pieces are removed from the board and both identities are revealed.',
     ruleMove: 'Pieces move one square in a straight line — forward, backward and sideways are all allowed.',
     ruleLake: 'Lakes cannot be crossed and block the Scout\'s line of sight.',
     ruleForest: 'A piece that wins a fight in the forest stays hidden; a piece standing in the forest cannot be identified by the Scout.',
@@ -486,7 +521,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     playerStatuses: 'プレイヤー状況', liveLabel: 'ライブ',
     onlineLabel: 'オンライン', offlineLabel: 'オフライン',
     teamRedUnit: '第1部隊（ホスト）', teamBlueUnit: '第2部隊（ゲスト）',
-    waitingOpponentJoin: '⏳ 相手の参加を待っています。参加した時点で配置が始まります。',
+    waitingOpponentJoin: '⏳ 相手がルームに参加した時点で配置が始まります。',
     bothReadyGoSetup: '⚔️ 両者準備完了！配置画面へ移動します…',
     leaveRoom: 'ルームを退出', returnToLobby: 'ロビーに戻る', playerName: 'プレイヤー名', goBack: '戻る',
     phNameRed: '例: 赤の指揮官', phRoomCode: '例: TAK-8492',
@@ -536,7 +571,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     ruleSpy: 'スパイは元帥に攻撃・防御どちらでも勝ちます。',
     ruleMiner: '工兵は地雷を除去してそのマスに進みます。他の駒は地雷に当たると倒されます。',
     ruleScout: '斥候は同じ行にいる敵の駒の正体を明かします。任務は1手を消費し、初回は無料、その後は{n}手の待機が必要です。',
-    ruleEqual: '同じ階級では勝敗がつきません。両方とも生き残り、攻撃側は元のマスに戻り、双方の正体が明らかになります。',
+    ruleEqual: '同じ階級では勝敗がつきません。両方の駒が盤上から取り除かれ、双方の正体が明らかになります。',
     ruleMove: '駒は縦か横に1マスずつ動きます。前後左右いずれも自由です。',
     ruleLake: '湖は通れず、斥候の視界も遮ります。',
     ruleForest: '森で戦闘に勝った駒は正体を隠したままです。森にいる駒は斥候でも識別できません。',
@@ -616,7 +651,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     playerStatuses: '플레이어 상태', liveLabel: '실시간',
     onlineLabel: '온라인', offlineLabel: '오프라인',
     teamRedUnit: '1부대 (방장)', teamBlueUnit: '2부대 (게스트)',
-    waitingOpponentJoin: '⏳ 상대의 참가를 기다리고 있습니다. 참가하면 배치가 시작됩니다.',
+    waitingOpponentJoin: '⏳ 상대가 방에 참가하면 배치가 시작됩니다.',
     bothReadyGoSetup: '⚔️ 두 플레이어 준비 완료! 배치 화면으로 이동합니다…',
     leaveRoom: '방 나가기', returnToLobby: '로비로 돌아가기', playerName: '플레이어 이름', goBack: '뒤로 가기',
     phNameRed: '예: 적군 지휘관', phRoomCode: '예: TAK-8492',
@@ -666,7 +701,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     ruleSpy: '스파이는 공격하든 수비하든 어떤 경우에도 원수를 이깁니다.',
     ruleMiner: '공병은 지뢰를 제거하고 그 칸으로 이동합니다. 다른 기물은 지뢰에 부딪히면 죽습니다.',
     ruleScout: '정찰병은 같은 행에 있는 적 기물의 정체를 밝힙니다. 임무는 한 수를 소모하며, 첫 사용은 무료이고 이후 {n}수를 기다려야 합니다.',
-    ruleEqual: '계급이 같으면 승자가 없습니다. 둘 다 살아남고, 공격한 기물은 원래 칸으로 돌아가며 양쪽 모두 정체가 드러납니다.',
+    ruleEqual: '계급이 같으면 승자가 없습니다. 두 기물 모두 판에서 제거되며 양쪽 모두 정체가 드러납니다.',
     ruleMove: '기물은 가로 또는 세로로 한 칸씩 움직입니다. 앞뒤와 좌우 모두 자유롭습니다.',
     ruleLake: '호수는 지날 수 없고 정찰병의 시야도 막습니다.',
     ruleForest: '숲에서 전투에 이긴 기물은 정체를 숨긴 채 남습니다. 숲에 있는 기물은 정찰병으로도 식별할 수 없습니다.',
