@@ -4,7 +4,6 @@ import { BoardState, Coords, GamePhase, PlacedPiece, Player, PieceDefinition, Sp
 import { BOARD_ROWS, BOARD_COLS, LAKE_COORDS, FOREST_COORDS, PIECE_DEFINITIONS, createInitialPiecePool, PLAYERS, TIMER_PRESETS, TRANSLATIONS, MAX_MISSED_TURNS, TOPLAM_TAS } from './constants';
 import Board from './components/Board';
 import SetupUI from './components/SetupUI';
-import PlayerPanel from './components/PlayerPanel';
 import MenuScreen from './components/MenuScreen';
 import GameHeader from './components/GameHeader';
 import PieceCountChip from './components/PieceCountChip';
@@ -68,7 +67,7 @@ const App: React.FC = () => {
     const [lastCombatCoords, setLastCombatCoords] = useState<Coords | null>(null);
     // Oyunun (tur) basladigi an. Sunucudan gelir (both_setup_complete /
     // game_state_restored); yeniden baslatmada null'a doner. "Gecen oyun suresi"
-    // sayaci bununla senkron hesaplaniyor (PlayerPanel).
+    // sayaci bununla senkron hesaplaniyor.
     const [gameStartedAt, setGameStartedAt] = useState<number | null>(null);
     // Oyun basindan beri gecen sure (saniye). GAME_OVER'da sayac durur, son hali kalir.
     const [gecenSure, setGecenSure] = useState<number>(0);
@@ -281,9 +280,8 @@ const App: React.FC = () => {
             // Tur suresini sunucu yurutuyor; sira degisimini o bildiriyor.
             // Suresi dolan taraf BEN isem bunu SOYLE. Eskiden sessizdi: secim ve
             // isaretler bir anda kayboluyor, sira karsiya geciyor, oyuncu sebebini
-            // hicbir yerde goremiyordu. Geri sayim "Oyun Bilgisi" panosunda ama o
-            // pano VARSAYILAN OLARAK KAPALI (PlayerPanel isOpen=false), yani sure
-            // azalirken de bir uyari yok.
+            // hicbir yerde goremiyordu. Geri sayim ust seritte duruyor ama sure
+            // azalirken ayrica bir uyari cikmiyor.
             //
             // nextPhase rakibin fazi ise sirasi biten benim demektir.
             case 'turn_timeout': {
@@ -1004,6 +1002,8 @@ const App: React.FC = () => {
             gecenSure={gecenSure}
             onRestart={handleRestartGame}
             onLeaveRoom={handleLeaveOnlineRoom}
+            volume={volume}
+            onVolumeChange={handleVolumeChange}
         />
         <main className="flex-1 flex items-start justify-center gap-4 p-2 md:p-4 max-w-7xl mx-auto w-full">
             {/* Kayip seritleri. Taraflar SABIT: tahta iki oyuncuda da ayni yonde
@@ -1034,9 +1034,6 @@ const App: React.FC = () => {
                 )}
             </div>
             {savasFazi && <KayipSeridi combatHistory={combatHistory} taraf={PLAYERS.BLUE} lang={lang} />}
-            {/* Carpisma gecmisi cekmecesi: PENCERENIN sag kenarina yapisik (fixed),
-                acildiginda 500px. Yer ayirmaz, tahtanin bosalan alani alir. */}
-            <PlayerPanel combatHistory={combatHistory} missedTurns={missedTurns} isOnlineMode={isOnlineMode} volume={volume} onVolumeChange={handleVolumeChange} lang={lang} />
         </main>
         <OnlineModal isOpen={isOnlineModalOpen} onClose={() => setIsOnlineModalOpen(false)} roomCode={roomCode} playerTeam={myOnlineTeam} roomState={roomState} onCreateRoom={handleCreateOnlineRoom} onJoinRoom={handleJoinOnlineRoom} onLeaveRoom={handleLeaveOnlineRoom} errorMessage={onlineErrorMessage} lang={lang} />
         <RoomCodeModal isOpen={showRoomCode} roomCode={roomCode} lang={lang} />

@@ -20,17 +20,20 @@ interface KayipSeridiProps {
     lang: Language;
 }
 
-const KayipSeridi: React.FC<KayipSeridiProps> = ({ combatHistory, taraf, lang }) => {
-    const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
-    const isRed = taraf === PLAYERS.RED;
-
+/**
+ * Bir tarafin dusen taslari, [ad, adet] ciftleri halinde ve SIRALI.
+ *
+ * tasSayimi.ts'e konulamadi: o dosya yalnizca TIP import ediyor (testi Node ile
+ * dogrudan calisiyor), buradaki siralama ise PIECE_DEFINITIONS'a — yani bir
+ * DEGERE — ihtiyac duyuyor.
+ */
+const kayipSatirlari = (combatHistory: CombatResult[], taraf: Player): [string, number][] => {
     // rakipKayiplari(gecmis, X) => X'in RAKIBININ kayiplari. Bu yuzden karsi taraf
     // veriliyor: kirmizinin kayiplarini almak icin maviyi soruyoruz.
     // Sayim carpisma gecmisinden turetiliyor ve guvenli — olen tas her zaman aciga
     // cikiyor, orman kurali yalnizca KAZANANI gizliyor (bkz. lib/tasSayimi.ts).
-    const kayiplar = rakipKayiplari(combatHistory, isRed ? PLAYERS.BLUE : PLAYERS.RED);
-
-    const satirlar = Object.entries(kayiplar)
+    const kayiplar = rakipKayiplari(combatHistory, taraf === PLAYERS.RED ? PLAYERS.BLUE : PLAYERS.RED);
+    return (Object.entries(kayiplar) as [string, number][])
         .filter(([, adet]) => adet > 0)
         // En degerli kayip ustte. Mayın rank 11 ile en tepeye cikardi (savas degeri
         // degil, "gecilmez" isareti); Sancak 0 ile en alta. Ikisi de HAREKETSIZ, o
@@ -41,13 +44,19 @@ const KayipSeridi: React.FC<KayipSeridiProps> = ({ combatHistory, taraf, lang })
             if (ha !== hb) return hb - ha;
             return (tb?.rank ?? 0) - (ta?.rank ?? 0);
         });
+};
 
+const KayipSeridi: React.FC<KayipSeridiProps> = ({ combatHistory, taraf, lang }) => {
+    const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
+    const isRed = taraf === PLAYERS.RED;
+
+    const satirlar = kayipSatirlari(combatHistory, taraf);
     const baslik = isRed ? t.lossesRedTitle : t.lossesBlueTitle;
 
     return (
         // hidden lg:flex — iki serit + tahta dar ekranda sikisiyor. Bilgi orada
-        // kaybolmuyor: tasa tiklaninca cikan PieceCountChip ve carpisma gecmisi
-        // calismaya devam ediyor.
+        // tamamen kaybolmuyor: tasa tiklaninca tahtanin ustunde cikan
+        // PieceCountChip ayni sayimi (o TUR icin) gostermeye devam ediyor.
         <aside
             className="hidden lg:flex flex-col gap-1 w-[74px] shrink-0 select-none"
             aria-label={baslik}

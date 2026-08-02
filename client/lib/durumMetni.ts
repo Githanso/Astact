@@ -2,9 +2,9 @@ import { GamePhase, OnlineStatus, Player, Language } from '../types';
 import { PLAYERS, TRANSLATIONS } from '../constants';
 
 // Oyunun o anki durum cumlesi ve rengi. IKI yerde kullaniliyor: header'daki orta
-// serit ve PlayerPanel'in durum satiri. Ayni switch'i iki dosyaya kopyalamak
+// seridin durum kutusu. Ayni switch'i iki dosyaya kopyalamak
 // birinin digerinden sapmasina yol acardi (bir kez oldu: cevirilerden once
-// PlayerPanel'de sabit Turkce metinler kalmisti).
+// panoda sabit Turkce metinler kalmisti).
 //
 // Online modda durum RAKIBE gore yazilir — kendi durumunu gostermenin bilgi degeri
 // yok, oyuncu kendi dizilim panelini zaten goruyor. onlineStatus yalnizca online

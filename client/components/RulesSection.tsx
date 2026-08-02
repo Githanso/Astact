@@ -60,7 +60,7 @@ export const RulesSection: React.FC<RulesSectionProps> = ({ lang }) => {
             </button>
 
             {/* Kapaliyken govde DOM'dan kalkiyor — pencerenin geri kalani ayni sekilde
-                calisiyor (bkz. PlayerPanel), tutarli olsun diye ayni yol secildi. */}
+                calisiyor, tutarli olsun diye ayni yol secildi. */}
             {isOpen && (
                 <div className="px-3 pb-3 pt-1 space-y-3 max-h-[46vh] overflow-y-auto custom-scrollbar">
                     <div>

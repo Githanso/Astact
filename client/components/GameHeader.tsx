@@ -3,6 +3,7 @@ import { Language, Player, GamePhase, OnlineStatus, RoomState } from '../types';
 import { PLAYERS, TRANSLATIONS } from '../constants';
 import { oyunDurumu } from '../lib/durumMetni';
 import { RotateCcw, LogOut, Shield, WifiOff, Clock } from 'lucide-react';
+import { MuteToggle } from './SettingsControls';
 
 // Oyun ekraninin ust seridi. Iki satir:
 //   1) solda marka, sagda RAKIBIN durumu + oda kodu,
@@ -28,6 +29,8 @@ interface GameHeaderProps {
     gecenSure: number;
     onRestart: () => void;
     onLeaveRoom: () => void;
+    volume: number;          // ses duzeyi (0-1) — MuteToggle'in durumu
+    onVolumeChange: (v: number) => void;
 }
 
 // Gecen sureyi MM:SS, 60 dk gecerse H:MM:SS biciminde yaz.
@@ -42,6 +45,7 @@ const formatSure = (sn: number) => {
 const GameHeader: React.FC<GameHeaderProps> = ({
     lang, isOnlineMode, isConnected, roomCode, myOnlineTeam, roomState,
     gamePhase, onlineStatus, currentPlayer, turnTimeRemaining, gecenSure, onRestart, onLeaveRoom,
+    volume, onVolumeChange,
 }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
     const { metin: durumMetni, renk: durumRengi } = oyunDurumu(gamePhase, onlineStatus, currentPlayer, lang);
@@ -164,6 +168,17 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Sustur / sesi ac. Once sag kenardaki cekmecenin basligindaydi;
+                                cekmece kaldirilinca (icinde carpisma gecmisi vardi, o da
+                                kaldirildi) oyun icindeki TEK ses denetimi olarak buraya
+                                tasindi. Menu ekranindaki dugmeyle ayni bileseni kullaniyor. */}
+                            <MuteToggle
+                                volume={volume}
+                                onVolumeChange={onVolumeChange}
+                                lang={lang}
+                                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all active:scale-95"
+                                iconClassName="w-3.5 h-3.5"
+                            />
                             <button
                                 onClick={onRestart}
                                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/40 transition-all active:scale-95"
