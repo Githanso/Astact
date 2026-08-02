@@ -43,10 +43,15 @@ export const PIECE_DEFINITIONS: { [key: string]: Omit<PieceDefinition, 'count'> 
   'Teğmen': { name: 'Teğmen', rank: 5, special: null, movable: true },
   'Çavuş': { name: 'Çavuş', rank: 4, special: null, movable: true },
   'Onbaşı': { name: 'Onbaşı', rank: 3, special: null, movable: true },
+  // Alt rutbeler BENZERSIZ: eskiden Er=Keşifçi=2 ve İstihkamcı=Casus=1 idi, bu yuzden
+  // Istihkamci Casus'a saldirinca "esit rutbe" cikip IKISI birden dusuyordu. Artik
+  // her tasin kendi seviyesi var; esit rutbe yalnizca AYNI TUR carpisinca oluyor.
+  // Casus -1: en zayif tas. Mareşal'i yenmesi rutbeden bagimsiz OZEL kural
+  // (resolveCombat'ta SPY dali), o yuzden negatif deger o kurali etkilemiyor.
   'Er': { name: 'Er', rank: 2, special: null, movable: true },
-  'Keşifçi': { name: 'Keşifçi', rank: 2, special: SpecialAbility.SCOUT, movable: true },
-  'İstihkamcı': { name: 'İstihkamcı', rank: 1, special: SpecialAbility.MINER, movable: true },
-  'Casus': { name: 'Casus', rank: 1, special: SpecialAbility.SPY, movable: true },
+  'Keşifçi': { name: 'Keşifçi', rank: 1, special: SpecialAbility.SCOUT, movable: true },
+  'İstihkamcı': { name: 'İstihkamcı', rank: 0, special: SpecialAbility.MINER, movable: true },
+  'Casus': { name: 'Casus', rank: -1, special: SpecialAbility.SPY, movable: true },
   'Mayın': { name: 'Mayın', rank: 11, special: null, movable: false },
   'Sancak': { name: 'Sancak', rank: 0, special: null, movable: false },
 };
@@ -239,6 +244,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     combatEqualRank: 'Aynı rütbede ({ar}) çarpıştılar: İkisi de oyundan çıkarıldı.',
     onlineButton: 'Online Oyun', roomLabel: 'Oda', youAre: 'Siz', opponentShort: 'Rakip',
     countYoursLabel: 'Sende', countOpponentLostLabel: 'Rakip kaybı',
+    lossesRedTitle: 'Düşen Kırmızı', lossesBlueTitle: 'Düşen Mavi',
     connectedShort: 'Bağlı', disconnectedShort: 'Bağlantı Kesik',
     restartButton: 'Yeniden Başlat', playAgain: 'Tekrar Oyna', statsButton: 'İstatistikler', timerPresetsLabel: 'Süre Ön Ayarları',
     settingsPanelTitle: 'Ayarlar', gameInfoPanelTitle: 'Oyun Bilgisi',
@@ -373,6 +379,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     combatEqualRank: 'Equal rank ({ar}) clash: both were eliminated.',
     onlineButton: 'Online Game', roomLabel: 'Room', youAre: 'You', opponentShort: 'Opponent',
     countYoursLabel: 'Yours', countOpponentLostLabel: 'Opponent lost',
+    lossesRedTitle: 'Red losses', lossesBlueTitle: 'Blue losses',
     connectedShort: 'Connected', disconnectedShort: 'Disconnected',
     restartButton: 'Restart', playAgain: 'Play Again', statsButton: 'Statistics', timerPresetsLabel: 'Timer Presets',
     settingsPanelTitle: 'Settings', gameInfoPanelTitle: 'Game Info',
@@ -503,6 +510,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     combatEqualRank: '同階級（{ar}）の衝突: 双方とも脱落した。',
     onlineButton: 'オンライン対戦', roomLabel: 'ルーム', youAre: 'あなた', opponentShort: '相手',
     countYoursLabel: '自軍', countOpponentLostLabel: '相手の損失',
+    lossesRedTitle: '赤の損失', lossesBlueTitle: '青の損失',
     connectedShort: '接続中', disconnectedShort: '切断',
     restartButton: '再開', playAgain: 'もう一度遊ぶ', statsButton: '統計', timerPresetsLabel: '持ち時間設定',
     settingsPanelTitle: '設定', gameInfoPanelTitle: 'ゲーム情報',
@@ -633,6 +641,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     combatEqualRank: '동일 계급 ({ar}) 충돌: 둘 다 제거되었다.',
     onlineButton: '온라인 대전', roomLabel: '방', youAre: '나', opponentShort: '상대',
     countYoursLabel: '내 기물', countOpponentLostLabel: '상대 손실',
+    lossesRedTitle: '적군 손실', lossesBlueTitle: '청군 손실',
     connectedShort: '연결됨', disconnectedShort: '연결 끊김',
     restartButton: '다시 시작', playAgain: '다시 플레이', statsButton: '통계', timerPresetsLabel: '시간 설정',
     settingsPanelTitle: '설정', gameInfoPanelTitle: '게임 정보',

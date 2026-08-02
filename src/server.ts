@@ -275,10 +275,13 @@ const SUNUCU_TAS_TANIMLARI: Record<string, { rank: number; special: string | nul
   "Teğmen": { rank: 5, special: null, movable: true },
   "Çavuş": { rank: 4, special: null, movable: true },
   "Onbaşı": { rank: 3, special: null, movable: true },
+  // Alt rutbeler BENZERSIZ (istemcideki PIECE_DEFINITIONS ile birebir ayni olmali):
+  // Er 2 > Keşifçi 1 > İstihkamcı 0 > Casus -1. Eskiden Er=Keşifçi ve
+  // İstihkamcı=Casus esitti, Istihkamci Casus'a saldirinca ikisi de dusuyordu.
   "Er": { rank: 2, special: null, movable: true },
-  "Keşifçi": { rank: 2, special: "SCOUT", movable: true },
-  "İstihkamcı": { rank: 1, special: "MINER", movable: true },
-  "Casus": { rank: 1, special: "SPY", movable: true },
+  "Keşifçi": { rank: 1, special: "SCOUT", movable: true },
+  "İstihkamcı": { rank: 0, special: "MINER", movable: true },
+  "Casus": { rank: -1, special: "SPY", movable: true },
   "Mayın": { rank: 11, special: null, movable: false },
   "Sancak": { rank: 0, special: null, movable: false },
 };

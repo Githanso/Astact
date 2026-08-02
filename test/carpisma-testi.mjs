@@ -216,14 +216,14 @@ console.log("\n=== 3) MAYIN HER IKI TASI DA YOK EDER ===");
 console.log("\n=== 4) ISTIHKAMCI BOMBAYI IMHA EDER ===");
 {
   const { p1, p2 } = await kur(
-    [KB, kirmizi("r1", "İstihkamcı", 1, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col, { special: "MINER" })],
+    [KB, kirmizi("r1", "İstihkamcı", 0, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col, { special: "MINER" })],
     [MB, mavi("m1", "Mayın", 11, ACIK_HEDEF.row, ACIK_HEDEF.col, { movable: false })]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
-  check(m1?.combatResult?.outcome === "ATTACKER_WINS", "rutbe 1 olmasina ragmen mayını aldi", `(${m1?.combatResult?.outcome})`);
+  check(m1?.combatResult?.outcome === "ATTACKER_WINS", "rutbe 0 olmasina ragmen mayını aldi", `(${m1?.combatResult?.outcome})`);
   check(bos(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]), "mayın tahtadan kalkti");
   check(m2?.opponentBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]?.name === "İstihkamcı", "istihkamci kareye gecti");
   // Istemci "Istihkamci Mayını imha etti" metnini bu alana gore seciyor; gelmezse
-  // yerine "rutbesi buyuk olan yendi" basiliyordu (1 > 11 diyen yanlis cumle).
+  // yerine "rutbesi buyuk olan yendi" basiliyordu (0 > 11 diyen yanlis cumle).
   check(m1?.combatResult?.attackerSpecial === "MINER" && m2?.combatResult?.attackerSpecial === "MINER",
         "ozel yetenek iki tarafa da bildirildi", `(${m1?.combatResult?.attackerSpecial}/${m2?.combatResult?.attackerSpecial})`);
   await kapat(p1, p2);
@@ -233,7 +233,7 @@ console.log("\n=== 4) ISTIHKAMCI BOMBAYI IMHA EDER ===");
 console.log("\n=== 5) CASUS MARESAL'I ALIR ===");
 {
   const { p1, p2 } = await kur(
-    [KB, kirmizi("r1", "Casus", 1, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col, { special: "SPY" })],
+    [KB, kirmizi("r1", "Casus", -1, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col, { special: "SPY" })],
     [MB, mavi("m1", "Mareşal", 10, ACIK_HEDEF.row, ACIK_HEDEF.col)]);
   const { m1 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
   check(m1?.combatResult?.outcome === "ATTACKER_WINS", "casus maresali yendi", `(${m1?.combatResult?.outcome})`);
@@ -247,7 +247,7 @@ console.log("\n=== 6) MARESAL SALDIRIRSA BILE CASUS KAZANIR ===");
 {
   const { p1, p2 } = await kur(
     [KB, kirmizi("r1", "Mareşal", 10, ACIK_SALDIRAN.row, ACIK_SALDIRAN.col)],
-    [MB, mavi("m1", "Casus", 1, ACIK_HEDEF.row, ACIK_HEDEF.col, { special: "SPY" })]);
+    [MB, mavi("m1", "Casus", -1, ACIK_HEDEF.row, ACIK_HEDEF.col, { special: "SPY" })]);
   const { m1, m2 } = await hamle(p1, p2, p1, ACIK_SALDIRAN, ACIK_HEDEF);
   check(m1?.combatResult?.outcome === "DEFENDER_WINS", "savunan casus maresali yendi", `(${m1?.combatResult?.outcome})`);
   check(m2?.myBoard?.[ACIK_HEDEF.row]?.[ACIK_HEDEF.col]?.name === "Casus", "casus tahtada kaldi");

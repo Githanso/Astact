@@ -8,6 +8,7 @@ import PlayerPanel from './components/PlayerPanel';
 import MenuScreen from './components/MenuScreen';
 import GameHeader from './components/GameHeader';
 import PieceCountChip from './components/PieceCountChip';
+import KayipSeridi from './components/KayipSeridi';
 import { kalanTaslarim, rakipKayiplari } from './lib/tasSayimi';
 import RoomCodeModal from './components/RoomCodeModal';
 import MenuSettingsModal from './components/MenuSettingsModal';
@@ -891,6 +892,10 @@ const App: React.FC = () => {
     // gelir (birakma yine islemez ama kullaniciya "calisiyor" izlenimi verir).
     const dizilimAsamasi = (gamePhase === 'SETUP_RED' || gamePhase === 'SETUP_BLUE') && !isWaitingOpponentSetup;
 
+    // Kayip seritleri yalnizca savas ve sonrasinda anlamli — dizilimde henuz carpisma
+    // yok, serit bos bir kutu olarak yer kaplardi.
+    const savasFazi = gamePhase.startsWith('PLAY') || gamePhase === 'GAME_OVER';
+
     const handleDragDrop = (source: any, target: Coords) => {
         if (!source || !dizilimAsamasi) return;
         const ap = (isOnlineMode && myOnlineTeam) ? myOnlineTeam : currentPlayer; if (!ap) return;
@@ -1001,6 +1006,12 @@ const App: React.FC = () => {
             onLeaveRoom={handleLeaveOnlineRoom}
         />
         <main className="flex-1 flex items-start justify-center gap-4 p-2 md:p-4 max-w-7xl mx-auto w-full">
+            {/* Kayip seritleri. Taraflar SABIT: tahta iki oyuncuda da ayni yonde
+                duruyor (mavi 0-3, kirmizi 7-10), dolayisiyla dusen kirmizi solda /
+                dusen mavi sagda dendiginde her iki oyuncuda da ganimet kendi
+                tarafinda birikiyor — perspektif hesabi gerekmiyor.
+                Dizilimde gizli: henuz carpisma yok. */}
+            {savasFazi && <KayipSeridi combatHistory={combatHistory} taraf={PLAYERS.RED} lang={lang} />}
             <div className={`relative flex-grow w-full flex items-center justify-center ${tahtaGenislikSiniri}`}>
                 {/* onDropAction YALNIZCA dizilim asamasinda geciliyor. Oyun basladiktan
                     sonra (ve "Hazir"la dizilim kilitlendikten sonra) undefined kalir;
@@ -1022,6 +1033,7 @@ const App: React.FC = () => {
                     </div>
                 )}
             </div>
+            {savasFazi && <KayipSeridi combatHistory={combatHistory} taraf={PLAYERS.BLUE} lang={lang} />}
             {/* Carpisma gecmisi cekmecesi: PENCERENIN sag kenarina yapisik (fixed),
                 acildiginda 500px. Yer ayirmaz, tahtanin bosalan alani alir. */}
             <PlayerPanel combatHistory={combatHistory} missedTurns={missedTurns} isOnlineMode={isOnlineMode} volume={volume} onVolumeChange={handleVolumeChange} lang={lang} />
