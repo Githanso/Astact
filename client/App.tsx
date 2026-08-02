@@ -958,6 +958,7 @@ const App: React.FC = () => {
             onlineStatus={onlineStatus}
             currentPlayer={currentPlayer}
             turnTimeRemaining={turnTimeRemaining}
+            gecenSure={gecenSure}
             onRestart={handleRestartGame}
             onLeaveRoom={handleLeaveOnlineRoom}
         />
@@ -980,7 +981,7 @@ const App: React.FC = () => {
             </div>
             {/* Carpisma gecmisi cekmecesi: PENCERENIN sag kenarina yapisik (fixed),
                 acildiginda 500px. Yer ayirmaz, tahtanin bosalan alani alir. */}
-            <PlayerPanel combatHistory={combatHistory} missedTurns={missedTurns} isOnlineMode={isOnlineMode} gecenSure={gecenSure} volume={volume} onVolumeChange={handleVolumeChange} lang={lang} />
+            <PlayerPanel combatHistory={combatHistory} missedTurns={missedTurns} isOnlineMode={isOnlineMode} volume={volume} onVolumeChange={handleVolumeChange} lang={lang} />
         </main>
         <OnlineModal isOpen={isOnlineModalOpen} onClose={() => setIsOnlineModalOpen(false)} roomCode={roomCode} playerTeam={myOnlineTeam} roomState={roomState} onCreateRoom={handleCreateOnlineRoom} onJoinRoom={handleJoinOnlineRoom} onLeaveRoom={handleLeaveOnlineRoom} errorMessage={onlineErrorMessage} lang={lang} />
         <RoomCodeModal isOpen={showRoomCode} roomCode={roomCode} lang={lang} />

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CombatResult, SpecialAbility, Language } from '../types';
 import { PLAYERS, TRANSLATIONS, getPieceLabel, MAX_MISSED_TURNS } from '../constants';
-import { Swords, Info, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { Swords, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { MuteToggle } from './SettingsControls';
 
 // Carpisma gecmisi cekmecesi: PENCERENIN sag kenarina yapisik durur (fixed right-0).
@@ -10,7 +10,7 @@ interface PlayerPanelProps {
     combatHistory: CombatResult[];
     missedTurns: { red: number; blue: number };   // süresi dolduğu için kaçırılan tur
     isOnlineMode: boolean;   // online modda kaçırma kuralı işlemiyor, kutu gizlenir
-    gecenSure: number;       // oyun basindan beri gecen sure (saniye)
+    // Gecen oyun suresi artik BURADA degil, ust seritte (GameHeader) gosteriliyor.
     volume: number;          // ses duzeyi (0-1) — MuteToggle'in durumu
     onVolumeChange: (v: number) => void;
     lang: Language;
@@ -84,7 +84,6 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
     combatHistory,
     missedTurns,
     isOnlineMode,
-    gecenSure,
     volume,
     onVolumeChange,
     lang,
@@ -93,15 +92,6 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
     // Cekmece VARSAYILAN KAPALI baslar: acikken tahtanin ustune bindigi icin
     // oyuncu her acilista once kapatmak zorunda kalmasin.
     const [isOpen, setIsOpen] = useState(false);
-
-    // Gecen sureyi MM:SS, 60 dk gecerse H:MM:SS biciminde yaz.
-    const formatSure = (sn: number) => {
-        const s = Math.max(0, Math.floor(sn));
-        const dk = Math.floor(s / 60);
-        const ss = String(s % 60).padStart(2, '0');
-        if (dk < 60) return `${String(dk).padStart(2, '0')}:${ss}`;
-        return `${Math.floor(dk / 60)}:${String(dk % 60).padStart(2, '0')}:${ss}`;
-    };
 
     // KAPALI: yalnizca sag kenarda ince bir tutamak duruyor.
     if (!isOpen) {
@@ -129,10 +119,6 @@ const PlayerPanel: React.FC<PlayerPanelProps> = ({
                 <span className="flex items-center gap-2">
                     <Info className="w-4 h-4 text-amber-400" />
                     <span>{t.combatHistory}</span>
-                </span>
-                <span className="flex items-center gap-1 text-amber-300 font-black text-[11px] tracking-normal" title={t.gameTime}>
-                    <Clock className="w-3.5 h-3.5" />
-                    {t.gameTime}: {formatSure(gecenSure)}
                 </span>
                 <span className="flex items-center gap-1.5">
                     {/* Sustur / sesi ac — menu ekranindakiyle ayni tek nokta; buradan

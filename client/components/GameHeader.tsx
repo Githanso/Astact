@@ -22,13 +22,26 @@ interface GameHeaderProps {
     onlineStatus: OnlineStatus;
     currentPlayer: Player | null;
     turnTimeRemaining: number;
+    // Oyun basindan beri gecen sure (saniye). Once carpisma gecmisi cekmecesinin
+    // basligindaydi; cekmece varsayilan KAPALI oldugu icin sure cogu zaman hic
+    // gorunmuyordu, o yuzden ust seride tasindi.
+    gecenSure: number;
     onRestart: () => void;
     onLeaveRoom: () => void;
 }
 
+// Gecen sureyi MM:SS, 60 dk gecerse H:MM:SS biciminde yaz.
+const formatSure = (sn: number) => {
+    const s = Math.max(0, Math.floor(sn));
+    const dk = Math.floor(s / 60);
+    const ss = String(s % 60).padStart(2, '0');
+    if (dk < 60) return `${String(dk).padStart(2, '0')}:${ss}`;
+    return `${Math.floor(dk / 60)}:${String(dk % 60).padStart(2, '0')}:${ss}`;
+};
+
 const GameHeader: React.FC<GameHeaderProps> = ({
     lang, isOnlineMode, isConnected, roomCode, myOnlineTeam, roomState,
-    gamePhase, onlineStatus, currentPlayer, turnTimeRemaining, onRestart, onLeaveRoom,
+    gamePhase, onlineStatus, currentPlayer, turnTimeRemaining, gecenSure, onRestart, onLeaveRoom,
 }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.TR;
     const { metin: durumMetni, renk: durumRengi } = oyunDurumu(gamePhase, onlineStatus, currentPlayer, lang);
@@ -115,19 +128,39 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                             </div>
                         )}
 
-                        {/* Durum seridi: sira kimde + kalan sure, TEK kutuda. Ayri bir
-                            sure kutusu kurulmadi — ikisi ayni soruya cevap veriyor
-                            ("simdi ne oluyor"), ayrildiklarinda goz iki yere gidiyordu.
-                            Kutunun rengi zaten sirasi gelenin takim rengi, yani sure de
-                            kimin suresi oldugunu renkten belli ediyor. */}
-                        <div className={`flex-1 min-w-0 flex items-center justify-center gap-3 px-3 py-2 rounded-xl bg-slate-800/40 border text-xs font-bold ${durumRengi || 'text-slate-300 border-slate-700/60'}`}>
-                            <span className="truncate">{durumMetni}</span>
-                            {gamePhase.startsWith('PLAY') && (
-                                <span className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1 rounded-lg bg-slate-950/60 border border-slate-700/60 font-mono text-lg tabular-nums">
-                                    <Clock className="w-5 h-5" />
-                                    {turnTimeRemaining}{t.seconds}
-                                </span>
-                            )}
+                        {/* Durum seridi UC BOLMELI. Yan sutunlar 1fr_auto_1fr ile ESIT
+                            genislikte, bu yuzden ortadaki durum cumlesi yan kutularin
+                            genisliginden bagimsiz olarak TAM ortada duruyor (flex ile
+                            justify-between kullansaydik, tur suresi ile gecen sure farkli
+                            genislikte oldugu icin cumle merkezden kayardi).
+                            Kutunun rengi sirasi gelenin takim rengi; tur suresi de bu
+                            yuzden kimin suresi oldugunu renkten belli ediyor. */}
+                        <div className={`flex-1 min-w-0 grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-2 rounded-xl bg-slate-800/40 border text-xs font-bold ${durumRengi || 'text-slate-300 border-slate-700/60'}`}>
+                            {/* SOL: sirasi gelenin kalan oynama suresi */}
+                            <span className="justify-self-start">
+                                {gamePhase.startsWith('PLAY') && (
+                                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-950/60 border border-slate-700/60 font-mono text-lg tabular-nums">
+                                        <Clock className="w-5 h-5" />
+                                        {turnTimeRemaining}{t.seconds}
+                                    </span>
+                                )}
+                            </span>
+                            {/* ORTA: sira kimde cumlesi */}
+                            <span className="min-w-0 truncate text-center">{durumMetni}</span>
+                            {/* SAG: oyun basindan beri gecen sure */}
+                            <span className="justify-self-end">
+                                {/* Etiket yok, yalnizca ikon + sure; olcusu tur suresiyle ayni
+                                    (font-mono text-lg). Ne oldugu title'dan okunuyor — yazi
+                                    kalktigi icin erisilebilir ipucu orada duruyor. Kehribar
+                                    rengi kaliyor: ayni boyutta olduklarindan tur suresiyle
+                                    ayirt ettiren tek ipucu bu. */}
+                                {gamePhase.startsWith('PLAY') && (
+                                    <span className="flex items-center gap-1.5 text-amber-300 font-mono text-lg tabular-nums whitespace-nowrap" title={t.gameTime}>
+                                        <Clock className="w-5 h-5" />
+                                        {formatSure(gecenSure)}
+                                    </span>
+                                )}
+                            </span>
                         </div>
 
                         <div className="flex items-center gap-2 flex-shrink-0">
