@@ -51,17 +51,20 @@ const KayipSeridi: React.FC<KayipSeridiProps> = ({ combatHistory, taraf, lang })
     const isRed = taraf === PLAYERS.RED;
 
     const satirlar = kayipSatirlari(combatHistory, taraf);
-    const baslik = isRed ? t.lossesRedTitle : t.lossesBlueTitle;
+    // Iki serit de AYNI basligi tasiyor; hangi tarafin oldugu kutunun renginden
+    // (kirmizi/mavi kenarlik ve zemin) anlasiliyor. Ekran okuyucuda renk bilgisi
+    // olmadigi icin aria-label'a takim adi ayrica ekleniyor.
+    const baslik = t.capturedTitle;
 
     return (
         // hidden lg:flex — iki serit + tahta dar ekranda sikisiyor. Bilgi orada
         // tamamen kaybolmuyor: tasa tiklaninca tahtanin ustunde cikan
         // PieceCountChip ayni sayimi (o TUR icin) gostermeye devam ediyor.
         <aside
-            className="hidden lg:flex flex-col gap-1 w-[74px] shrink-0 select-none"
-            aria-label={baslik}
+            className="hidden lg:flex flex-col gap-1 w-[92px] shrink-0 select-none"
+            aria-label={`${baslik}: ${isRed ? t.playerRed : t.playerBlue}`}
         >
-            <div className={`text-[9px] font-black uppercase tracking-wide text-center leading-tight px-1 py-1 rounded-lg border ${
+            <div className={`text-[10px] font-black uppercase tracking-wide text-center leading-tight px-1 py-1.5 rounded-lg border ${
                 isRed ? 'text-red-300 border-red-800/50 bg-red-950/30' : 'text-blue-200 border-blue-800/50 bg-blue-950/30'
             }`}>
                 {baslik}
@@ -92,13 +95,13 @@ const KayipSeridi: React.FC<KayipSeridiProps> = ({ combatHistory, taraf, lang })
                                         src={art}
                                         alt=""
                                         draggable={false}
-                                        className="w-full h-7 object-contain opacity-45 saturate-0"
+                                        className="w-full h-11 object-contain opacity-50 saturate-0"
                                     />
                                 )}
-                                <span className="w-full truncate text-center text-[8px] font-bold leading-tight text-slate-400">
+                                <span className="w-full truncate text-center text-[9px] font-bold leading-tight text-slate-400">
                                     {getPieceLabel(ad, lang)}
                                 </span>
-                                <span className={`font-mono text-[9px] font-black leading-none ${
+                                <span className={`font-mono text-[11px] font-black leading-none ${
                                     tukendi ? (isRed ? 'text-red-300' : 'text-blue-200') : 'text-slate-300'
                                 }`}>
                                     {adet}<span className="text-slate-600">/{toplam}</span>

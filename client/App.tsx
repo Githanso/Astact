@@ -196,6 +196,14 @@ const App: React.FC = () => {
         setGameStartedAt(null); setGecenSure(0);
         setBoard(createEmptyBoard(terrainRef.current.lakes)); setGamePhase('SETUP_RED');
         setPiecesToPlace(createInitialPiecePool());
+        // OYUN SONUCU VE GECMISI de sifirlanmali. Eskiden burada yoktu ve carpisma
+        // gecmisi lobiye tasiniyordu: beraberlikte modal "Tekrar Oyna" degil "Lobiye
+        // Don" gosteriyor (GameOverModal: rakip onayi beklenemez sayiliyor), oyuncu
+        // oradan yeni bir odaya giriyor ve YENI oyunda onceki oyunun dusen taslari
+        // seritlerde duruyordu — kayip seritleri combatHistory'den besleniyor.
+        setCombatHistory([]); setWinner(null); setRedCaptured([]); setBlueCaptured([]);
+        setSelectedPiece(null); setValidMoves([]); setSelectedPieceToPlace(null);
+        setLastMove(null); setLastCombatCoords(null); setScoutTargets([]);
         setScreen('MENU');
     }, []);
 

@@ -48,11 +48,16 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ winner, isDraw = false, n
     const kazandim = kisisel && winner === myTeam;
     const online = !!myTeam;
 
-    // Beraberlikte ve "rakip odadan çekildi" sonrasında YENİDEN BAŞLATMANIN
-    // anlamı yok: rakip odada değil, onay gelmeyecek. Bu durumlarda (yalnızca
-    // online) "Lobiye Dön" gösteriliyor — odayı terk edip lobiye döndürüyor.
-    // Yerel modda lobi olmadığı için her zaman yeniden başlatma kalıyor.
-    const lobiyeDon = online && (isDraw || reason === 'OPPONENT_QUIT');
+    // YALNIZCA "rakip odadan çekildi" durumunda yeniden başlatmanın anlamı yok:
+    // rakip odada değil, onay hiç gelmeyecek. Orada tek seçenek lobiye dönmek.
+    //
+    // BERABERLİK bu gruba GİRMİYOR (eskiden giriyordu ve hataydı): iki oyuncu da
+    // 3 tur kaçırdığında ikisi de odada ve bağlı, dolayısıyla yeniden başlatma
+    // onayı pekâlâ gelebiliyor. Oyuncu beraberlikte lobiye çıkıp yeni oda kurmak
+    // zorunda kalıyordu.
+    const sadeceLobi = online && reason === 'OPPONENT_QUIT';
+    // Lobiye dönme seçeneği yalnızca online oyunda var; yerel modda lobi yok.
+    const lobiSecenegi = online;
 
     // Başlık: kişiselleştirilmiş modda kazanan/kaybeden ayrı; beraberlikte ortak.
     const baslik = !winner ? t.drawHeading
@@ -104,10 +109,19 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ winner, isDraw = false, n
                         {t.winnerLabel}: {winner === PLAYERS.RED ? t.playerRed : t.playerBlue}!
                     </p>
                 )}
-                {restartNotice === 'REQUESTED' ? (
-                    /* Rakip yenilince "Yeniden Başlat" dedi: bu tarafa net bildirim
-                       + iki seçenek. Tekrar Oyna = onayla (iki taraf onaylayınca
-                       oyun başlar), Lobiye Dön = reddet ve odayı terk et. */
+                {/* Rakip odadan cekildiyse tek secenek lobi — restart onayi gelmeyecek. */}
+                {sadeceLobi ? (
+                    <button
+                        onClick={onLeaveLobby}
+                        className="w-full bg-slate-700 hover:bg-slate-600 border border-slate-500/40 text-white font-black py-3 px-6 rounded-xl text-sm transition-all shadow-lg uppercase tracking-wider cursor-pointer active:scale-95"
+                    >
+                        {t.returnToLobby}
+                    </button>
+                ) : (
+                    /* Diger butun bitislerde (galibiyet, yenilgi, BERABERLIK ve rakip
+                       "Tekrar Oyna" dedigi an) ayni ikili: Tekrar Oyna = onayla — iki
+                       taraf da onaylayinca oyun bastan baslar; Lobiye Don = odayi birak.
+                       Lobi secenegi yalnizca online oyunda anlamli. */
                     <div className="flex flex-col gap-2">
                         <button
                             onClick={onRestart}
@@ -115,24 +129,19 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ winner, isDraw = false, n
                         >
                             {t.playAgain}
                         </button>
-                        <button
-                            onClick={onLeaveLobby}
-                            className="w-full bg-slate-700 hover:bg-slate-600 border border-slate-500/40 text-white font-black py-3 px-6 rounded-xl text-sm transition-all shadow-lg uppercase tracking-wider cursor-pointer active:scale-95"
-                        >
-                            {t.returnToLobby}
-                        </button>
+                        {lobiSecenegi && (
+                            <button
+                                onClick={onLeaveLobby}
+                                className="w-full bg-slate-700 hover:bg-slate-600 border border-slate-500/40 text-white font-black py-3 px-6 rounded-xl text-sm transition-all shadow-lg uppercase tracking-wider cursor-pointer active:scale-95"
+                            >
+                                {t.returnToLobby}
+                            </button>
+                        )}
                     </div>
-                ) : (
-                <button
-                    onClick={lobiyeDon ? onLeaveLobby : onRestart}
-                    className={`w-full ${lobiyeDon ? 'bg-slate-700 hover:bg-slate-600 border border-slate-500/40' : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'} text-white font-black py-3 px-6 rounded-xl text-sm transition-all shadow-lg uppercase tracking-wider cursor-pointer active:scale-95`}
-                >
-                    {lobiyeDon ? t.returnToLobby : t.restartButton}
-                </button>
                 )}
                 {/* Online oyunda sunucu, yeniden başlatmayı iki taraf da isteyene kadar
                     yapmıyor. Bu not olmadan düğme "çalışmıyor" gibi görünüyordu. */}
-                {!lobiyeDon && notice && (
+                {!sadeceLobi && notice && (
                     <p className="mt-4 text-xs font-semibold text-amber-300 leading-relaxed">{notice}</p>
                 )}
             </div>
