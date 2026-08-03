@@ -8,7 +8,8 @@ export default defineConfig({
   plugins: [react()],
   build: {
     // Cikti dogrudan Worker'in servis ettigi klasore yaziliyor.
-    // emptyOutDir: false -> public/game_music.mp3 silinmesin.
+    // emptyOutDir: false -> public/sfx/ (lobi_music.mp3 + efektler), logo.svg,
+    // favicon.svg ve assets/ altindaki KAYNAK varliklar silinmesin.
     outDir: '../public',
     emptyOutDir: false,
   },

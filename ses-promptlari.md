@@ -16,14 +16,14 @@ müziği dışında hiçbir ses yok. Dosyalar hazır olunca kodu ben bağlayaca�
 
 | Konu | Kural |
 |---|---|
-| Klasör | `D:\proje\astact\astact-cf\public\` — doğrudan `public/` kökü (`game_music.mp3` da orada) |
+| Klasör | `D:\proje\astact\public\sfx\` — lobi müziği (`lobi_music.mp3`) da orada |
 | Dosya adı | Aşağıdaki başlıklarda verilen adların **birebir aynısı** — kodda o adla aranacak |
 | Biçim | **MP3**, 44.1 kHz. Mono tercih edilir, stereo da olur |
 | Bit hızı | 128 kbps yeter; efektler kısa, fark duyulmaz |
 | Seviye | Hepsini **-3 dBFS tepe değerine** normalize et. Göreli yükseklikleri (tıklama kısık, patlama gür) **kodda ben ayarlayacağım** — sen hepsini eşit ver |
 | Baştaki sessizlik | 20 ms'den az olmalı. Baştaki boşluk, oyunda "geç tepki" gibi duyulur |
 | Sondaki kuyruk | Efektin kendisinden uzun reverb kuyruğu olmasın |
-| Toplam boyut | Tüm efektler toplamı **500 KB altında** kalsın (`game_music.mp3` zaten 3.6 MB) |
+| Toplam boyut | Tüm efektler toplamı **500 KB altında** kalsın (`lobi_music.mp3` zaten 1.9 MB) |
 
 **Durum:** `sfx-move.mp3` geldi ve **bağlandı** — oyunda çalıyor (49 KB). Kalan on efekt bekliyor.
 

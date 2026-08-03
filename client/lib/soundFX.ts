@@ -1,9 +1,10 @@
-// Sound Manager — arka plan muzigi public/game_music.mp3 dosyasindan calinir.
+// Sound Manager — arka plan muzigi public/sfx/lobi_music.mp3 dosyasindan calinir.
 // (v5 kaynaginda bu dosya hic kullanilmiyor, muzik osilatorlerle sentezleniyordu.)
-const MUSIC_URL = '/game_music.mp3';
+// Ad "lobi": muzik yalnizca menude/lobide caliyor, odaya girilince susuyor.
+const MUSIC_URL = '/sfx/lobi_music.mp3';
 
-// Efekt sesleri. Dosya public/ altinda duruyor, ILK KULLANIMDA cekiliyor (onden
-// yukleme yok: acilista game_music.mp3 zaten 3.6 MB, ustune efekt bindirmiyoruz).
+// Efekt sesleri. Dosya public/sfx/ altinda duruyor, ILK KULLANIMDA cekiliyor (onden
+// yukleme yok: acilista lobi_music.mp3 zaten 1.9 MB, ustune efekt bindirmiyoruz).
 // gain = efektin kendi seviyesi; ustune bir de kullanicinin ses ayari (masterGain)
 // binyor. Yeni efekt gelince buraya bir satir + asagida bir metot govdesi yeter.
 const FX_MOVE = { url: '/sfx/sfx-move.mp3', gain: 0.7 };

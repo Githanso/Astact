@@ -25,7 +25,7 @@ cd client && npm install && cd ..
 
 npm run build:client   # client/ -> public/ (index.html + assets/)
                        # public/assets ICERIGINI once temizler: vite emptyOutDir:false
-                       # kullaniyor (game_music.mp3 silinmesin diye), bu yuzden
+                       # kullaniyor (sfx/ ve gorseller silinmesin diye), bu yuzden
                        # temizlenmezse eski hash'li bundle'lar birikir
 npm run dev            # http://127.0.0.1:8787
 npm run typecheck
@@ -66,7 +66,7 @@ npm run deploy
 
 `public/index.html` ve `public/assets/` derleme çıktısı ve **git'e dâhil değil** (bkz.
 `.gitignore`) — temiz bir klonda derlemeden dağıtırsanız boş bir site yüklersiniz.
-`public/` içindeki `logo.svg`, `favicon.svg` ve `game_music.mp3` ise kaynak varlık, repoda
+`public/` içindeki `logo.svg`, `favicon.svg` ve `sfx/` ise kaynak varlık, repoda
 duruyor.
 
 Sonuç: `https://astact.<hesap-adı>.workers.dev`
@@ -89,7 +89,7 @@ client/components/
   StatsModal.tsx           şu an KULLANILMIYOR (İstatistikler düğmesi kaldırıldı)
 public/index.html          derleme çıktısı — elle düzenlemeyin
 public/assets/*.js|css     derleme çıktısı
-public/game_music.mp3      derlemeden bağımsız, elle konuldu
+public/sfx/lobi_music.mp3  derlemeden bağımsız, elle konuldu
 public/logo.svg            giriş ekranı logosu — saydam vektör, elle konuldu
 public/favicon.svg         amblem (kelimesiz) — sekme ikonu, elle konuldu
                            (clean:assets yalnızca public/assets içini siler, kök korunur)
@@ -116,7 +116,7 @@ v5 ilk tutarlı paket.
   kaynağa alındı — artık HTML de yeniden üretilebilir.
 - **`vite.config.ts`**: AI Studio'dan kalan `GEMINI_API_KEY` / `API_KEY` define'ları
   kaldırıldı (oyun kullanmıyordu), çıktı `../public` klasörüne yönlendirildi
-  (`emptyOutDir: false` — `game_music.mp3` silinmesin diye).
+  (`emptyOutDir: false` — `sfx/` ve görseller silinmesin diye).
 - **`App.tsx` → `SetupUI` prop adları**: aşağıya bakın.
 
 ### Prop adı uyuşmazlığı — dizilim onay butonu ölüydü
