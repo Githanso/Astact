@@ -21,11 +21,14 @@
 // degistiginde test kendiliginden uyum sagliyor, denetledigi sey "iki tablo ve
 // sunucunun davranisi birbiriyle tutarli mi" sorusu.
 //
-// Tablolar kaynaktan METIN olarak okunuyor. src/server.ts bir Worker modulu
-// ("cloudflare:workers" import ediyor), Node'da import edilemez; client/
-// constants.ts ise types.ts'teki enum yuzunden Node'un tip ayiklamasindan
-// gecmiyor (bkz. tas-sayimi-testi.mjs). Ikisini de ayni yoldan okumak simetrik
-// ve i18n-denetim.mjs zaten ayni idiomu kullaniyor.
+// Tablolar kaynaktan METIN olarak okunuyor, import edilerek degil. src/server.ts
+// bir Worker modulu ("cloudflare:workers" import ediyor), Node'da yuklenemez.
+// client/constants.ts de yuklenemiyor, iki ayri sebeple: (1) './types' uzantisiz
+// import ediliyor, Node bunu cozemiyor; (2) uzanti eklense bile types.ts bir enum
+// tasiyor ve Node'un strip-only tip ayiklamasi enum kabul etmiyor ("TypeScript
+// enum is not supported in strip-only mode"). tasSayimi.ts bu yuzden bilerek
+// `import type` kullaniyor (bkz. tas-sayimi-testi.mjs). Ikisini de ayni yoldan
+// METIN olarak okumak hem simetrik hem de i18n-denetim.mjs'in zaten kullandigi idiom.
 //
 // 2. bolum dev sunucusu gerektirir.
 //   node test/tas-dagilimi-testi.mjs

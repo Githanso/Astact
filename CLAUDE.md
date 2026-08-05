@@ -13,10 +13,19 @@ npm run typecheck      # YALNIZCA src/**/*.ts (Worker). client/ bu kapsamda değ
 npm run karakter:webp -- <kaynak-klasoru>   # asker SVG'lerini characters/*.webp'ye çevirir
 ```
 
-**Sıra önemli:** `wrangler dev` çalışırken `build:client` yapılırsa statik dosya
-manifesti bayatlar, sayfa bembeyaz açılıp asset'ler 404 döner. Önce derle, sonra
-sunucuyu başlat; takılırsa `wrangler dev`'i yeniden başlat. `clean:assets` bu yüzden
-`public/assets` **dizinini değil içeriğini** siliyor.
+İstemcinin npm script'i yok, elle: `cd client && npx tsc --noEmit` (şu an temiz).
+`client/` içinde bir şey değiştirdiyseniz kök `typecheck` bunu görmez.
+
+**`wrangler dev` statik dosya manifestini AÇILIŞTA kuruyor.** Bunun iki ayrı sonucu var
+ve ikisi de yaşandı:
+
+- Sunucu çalışırken `build:client` yaparsanız manifest bayatlar, sayfa bembeyaz açılıp
+  asset'ler 404 döner. Önce derle, sonra sunucuyu başlat. `clean:assets` bu yüzden
+  `public/assets` **dizinini değil içeriğini** siliyor.
+- Sunucu çalışırken `public/` altına **yeni bir dosya** koyarsanız o dosya 404 döner —
+  ama `wrangler deploy` onu yükler. Yani dev'de görünmeyen bir dosya canlıya çıkabilir;
+  "dev'de 404, demek ki dahil değil" çıkarımı yanlış. Her iki durumda da çözüm
+  `wrangler dev`'i yeniden başlatmak.
 
 Yol içinde `&` olan klasörde (`C:\Users\Design&Motion\...`) npm script'leri kırılıyor —
 derleme `D:\` altında yapılmalı.
@@ -34,8 +43,20 @@ ve `ws://127.0.0.1:8787/ws/game-room` adresine bağlanır. Tek test çalıştır
 ASTACT_WS=wss://astact.<hesap>.workers.dev/ws/game-room npm run test:protokol   # canlıya karşı
 ```
 
-`npm run test:i18n` sunucu gerektirmez: `client/**/*.tsx` içinde sabit Türkçe metin ve
-çevrilmemiş değişken basımı arar.
+Sunucu gerektirmeyenler: `test:i18n` (sabit Türkçe metin ve çevrilmemiş değişken basımı
+arar), `test:sayim` (birim testi), `test:dagilim`'in 1. bölümü.
+
+**`test:i18n` şu an 1 bilinen yanlış pozitifle çıkıyor** (`ForestOverlay.tsx:33`,
+`savrul.sure` — değişken adı "süre" anahtar kelimesine takılıyor, kullanıcıya görünen
+metin değil). Yani sıfır çıkışlı bir kapı değil; yeni bulgu ararken çıktıyı okuyun,
+çıkış koduna bakmayın.
+
+Testler `.mjs` ve istemci TS'ini **import edemez**: `client/constants.ts` uzantısız
+`./types` import ediyor (Node çözemiyor) ve `types.ts` bir enum taşıyor (Node'un
+strip-only tip ayıklaması enum kabul etmiyor). Bu yüzden `tas-dagilimi-testi.mjs` ve
+`i18n-denetim.mjs` kaynağı **metin olarak** okuyup regex'le ayrıştırıyor;
+`client/lib/tasSayimi.ts` ise bilerek yalnızca `import type` kullandığı için doğrudan
+import edilebiliyor.
 
 Testler odayı `?seed=` ve `?setupMs=` sorgu parametreleriyle kuruyor (sabit arazi,
 kısaltılmış dizilim süresi). Bunlar **yalnızca test içindir**, oyuncu akışında yok.
@@ -174,11 +195,22 @@ bırakılırsa CSS `text-transform: uppercase` Türkçe kuralını uygular ve "W
   `assets/{floor,forest,lake}.avif`, `assets/characters/*.webp`.
 - Çıktı (`.gitignore`'da): `index.html`, `assets/index-*.js|css`.
 
-Karakter görselleri `arac/karakter-webp.mjs` ile üretiliyor. Kaynak SVG'ler (gömülü
-1024×1536 PNG taşıyan, dosya başı ~3 MB) **`public/` altında durmamalı** — wrangler
-`public/`'in tamamını servis eder. Araç PNG'yi doğrudan küçültmez, önce viewBox
-kompozisyonunu yeniden kurar: figürlerin ortak taban çizgisi ve boy hiyerarşisi o
-transform'un içinde yaşıyor.
+Karakter görselleri `arac/karakter-webp.mjs` ile üretiliyor; kaynak SVG'ler depo dışında
+durur (gömülü 1024×1536 PNG taşıyorlar, dosya başı ~0.5–3 MB). Araç PNG'yi doğrudan
+küçültmez, önce viewBox kompozisyonunu yeniden kurar: figürlerin ortak taban çizgisi ve
+boy hiyerarşisi o transform'un içinde yaşıyor. `ORTALANACAK` listesindekiler (`mayin`)
+figür değil yerdeki nesne sayılıp taban çizgisi yerine kareye ortalanır. Çıktı hep
+`public/assets/characters/<ad>.webp`, 384×384.
+
+Araç **klasördeki tüm SVG'leri** işler. Tek bir taşı güncellemek için o dosyayı tek
+başına geçici bir klasöre koyup aracı ona yöneltin; yoksa 14 görselin hepsi yeniden
+yazılır.
+
+**Kaynak SVG `public/` altına konmamalı.** Wrangler `public/`'in tamamını servis ediyor,
+orada bırakılan yarım megabaytlık kaynak dosya deploy'a giriyor. Çalışan `wrangler dev`
+onu göstermez (manifest açılışta kuruldu, bkz. yukarısı) — yani hata sessizce deploy'a
+kadar taşınır. Yanlışlıkla konmuşsa silmeden önce `md5sum` ile depo dışındaki kaynakla
+aynı olduğunu doğrulayın.
 
 `assets/` (public dışı) arayüzdeki 56 SVG'nin envanteri — `assets/OKUBENI.md` ve
 `assets/onizleme.html`.
