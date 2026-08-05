@@ -1,5 +1,7 @@
 import React from 'react';
 import { BoardState, Coords, PlacedPiece, Player , Language } from '../types';
+import { CANLI, HAREKET_AZALT } from '../constants';
+import { suDalgasiniBaslat } from '../lib/suDalgasi';
 import Square from './Square';
 
 interface BoardProps {
@@ -55,6 +57,13 @@ const rankStrip = (keyPrefix: string, labels: string[]) => (
 );
 
 const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highlightedPiece, validMoves, currentPlayer, perspectivePlayer, lang, lastCombatCoords, lastMove, scoutTargets = [], forests = [] }) => {
+    // Gol yuzeyinin dalgasi. Tahta ekranda oldugu surece donuyor, tahta gidince
+    // duruyor — menude bos yere rAF cevirmenin anlami yok.
+    React.useEffect(() => {
+        if (!CANLI || HAREKET_AZALT) return;
+        return suDalgasiniBaslat();
+    }, []);
+
     return (
         <div className="w-full max-w-[900px] mx-auto flex flex-col items-center">
             {/* ust harf seridi — solda/sagda sayi seritleri kadar bosluk birakilir */}
@@ -68,8 +77,34 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDropAction, highl
                 {rankStrip('left', RANKS)}
                 {/* 10 satir x 11 sutun — oyuncular sag-sol karsi karsiya */}
                 <div
-                    className="grid grid-cols-11 grid-rows-10 gap-0.5 p-1.5 rounded-xl shadow-2xl flex-1 bg-slate-900 border-4 border-slate-700/80 shadow-slate-950/80 aspect-[11/10]"
+                    className="relative grid grid-cols-11 grid-rows-10 gap-0.5 p-1.5 rounded-xl shadow-2xl flex-1 bg-slate-900 border-4 border-slate-700/80 shadow-slate-950/80 aspect-[11/10]"
                 >
+                {/* Zeminin canliligi: tahtanin ustunden gecen bulut golgesi.
+                    Toprak dalgalanmaz — zemini canlandiran sey uzerinden gecen isik.
+
+                    TEK katman, kare basina degil: 110 karenin her birine ayri katman
+                    hem pahali olurdu hem de desen 110 kez tekrar ederdi. Tekrar,
+                    sahteligin en cabuk yakalanan turu. Tek katman ayrica kare
+                    sinirlarinda kesilmiyor, tahtayi butun olarak gecıyor.
+
+                    Yigindaki yeri kasitli: z-index verilmedigi icin zemin/gol/orman
+                    uzerine biniyor ama TASLARIN ALTINDA kaliyor (Piece koku z-10).
+                    Boylece 8 piksellik rutbe rozeti hic soluklasmiyor — rozet
+                    okunurlugu oyunun temeli, bulut golgesi ondan onemli degil. */}
+                {CANLI && (
+                    <div
+                        className="zemin-isik absolute pointer-events-none mix-blend-soft-light"
+                        style={{
+                            left: '-15%', top: '-15%', width: '130%', height: '130%',
+                            backgroundImage:
+                                'radial-gradient(ellipse 30% 34% at 18% 22%, rgba(255,246,214,0.55), transparent 68%),' +
+                                'radial-gradient(ellipse 26% 30% at 72% 38%, rgba(0,0,0,0.60), transparent 70%),' +
+                                'radial-gradient(ellipse 34% 26% at 44% 76%, rgba(255,246,214,0.45), transparent 70%),' +
+                                'radial-gradient(ellipse 22% 28% at 86% 80%, rgba(0,0,0,0.50), transparent 72%),' +
+                                'radial-gradient(ellipse 28% 22% at 8% 62%, rgba(0,0,0,0.40), transparent 72%)',
+                        }}
+                    />
+                )}
                 {board.map((row, rowIndex) =>
                     row.map((square, colIndex) => {
                         const isMove = validMoves.some(m => m.row === rowIndex && m.col === colIndex);

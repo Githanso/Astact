@@ -13,6 +13,34 @@
 <!-- Zemin uygulamanin kokuyle ayni (slate-950). Onceden slate-800 idi ve React
      boyanmadan once bir kare acik gri parlama goruluyordu. -->
 <body class="bg-slate-950 text-white">
+    <!-- Gol karelerinin YUZEY BOZUNUMU. Golun uzerine sahte parlaklik boyamak
+         yerine fotografin kendisi dalgalandiriliyor; su gibi gorunmesinin sebebi bu.
+
+         React agacinin DISINDA, burada duruyor: filtre tek ornek olmali ve Board
+         yeniden baglanirken kaybolmamali.
+
+         Hareket BURADA YOK, SMIL <animate> KULLANILMIYOR: CSS'ten referans verilen
+         (filter: url(#su-dalga)) bir filtrenin icindeki SMIL'in yeniden ornekleme
+         davranisi tarayicilar arasinda oynak. Filtreyi lib/suDalgasi.ts suruyor —
+         deterministik ve sekme gizlenince rAF ile birlikte kendiliginden duruyor.
+
+         Gurultu feOffset ile KAYDIRILIYOR (baseFrequency degistirilmiyor):
+         baseFrequency oynatmak deseni yerinde "kaynatiyor", kaydirmak ise
+         ilerleyen dalga veriyor — su akar, kaynamaz.
+
+         Maliyeti yuksek, ama tahtada yalnizca 6 gol karesi var (server.ts:120) —
+         30 orman karesinde ayni sey YAPILMIYOR, orada sadece transform var.
+
+         color-interpolation-filters="sRGB" sart: varsayilan linearRGB gol
+         dokusunun rengini soldurup gri-mavi bir lekeye ceviriyor. -->
+    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+      <filter id="su-dalga" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.014 0.032" numOctaves="2" seed="7" result="gurultu" />
+        <feOffset in="gurultu" dx="0" dy="0" result="akan" />
+        <feDisplacementMap in="SourceGraphic" in2="akan" scale="7"
+                           xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>

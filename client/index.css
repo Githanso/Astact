@@ -5,9 +5,50 @@
    config'inde animation tanimi vardi — sinif hic CSS uretmiyor, fade'ler calismiyordu. */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-@keyframes sway { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(1.5deg); } 75% { transform: rotate(-1.5deg); } }
-@keyframes drift { 0% { transform: translateX(0); } 50% { transform: translateX(4px); } 100% { transform: translateX(0); } }
+/* ── Canli tahta ──────────────────────────────────────────────────────────────
+   Uc yuzey, uc ayri teknik. Secim kare sayisindan cikti: gol 6 kare, orman 30,
+   zemin 110. Pahali olan (SVG bozunum filtresi) yalnizca gole harcaniyor; orman
+   ve zemin SADECE transform ile suruluyor (kompozitor isi, repaint yok).
+   Bu yuzden burada hicbir yerde filter: blur() YOK. */
+
+/* Orman: agac tepesi ruzgarda savruluyor, dip sabit kaliyor
+   (transform-origin: bottom center bileşende veriliyor).
+   scale(1.06) sart: kare overflow-hidden, savrulma kenarda bos kose acmasin.
+   --genlik kare basina degisiyor (constants.ts -> ormanSavrulmasi): sik orman
+   daha az savruluyor. */
+@keyframes sway {
+  0%, 100% { transform: scale(1.06) rotate(0deg); }
+  25%      { transform: scale(1.06) rotate(calc(1.5deg * var(--genlik, 1))); }
+  75%      { transform: scale(1.06) rotate(calc(-1.5deg * var(--genlik, 1))); }
+}
+/* Sis: ormanin uzerinde capraz surukleniyor. Yuzde birim -> kare boyutundan
+   bagimsiz, mobilde de ayni okunuyor. */
+@keyframes drift {
+  0%   { transform: translate3d(-12%, -6%, 0); }
+  50%  { transform: translate3d(12%, 6%, 0); }
+  100% { transform: translate3d(-12%, -6%, 0); }
+}
 @keyframes shimmer { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+/* Kaustik: suyun dibindeki isik agi. IKI katman, farkli yon ve hizda — tek katman
+   dongusu goz tarafindan birkac saniyede yakalaniyor, ikisi ust uste binince
+   tekrar orugu kayboluyor. */
+@keyframes kaustik1 {
+  0%   { transform: translate3d(-8%, -5%, 0) scale(1.15); }
+  50%  { transform: translate3d(6%, 7%, 0) scale(1.32); }
+  100% { transform: translate3d(-8%, -5%, 0) scale(1.15); }
+}
+@keyframes kaustik2 {
+  0%   { transform: translate3d(7%, 4%, 0) scale(1.28); }
+  50%  { transform: translate3d(-7%, -8%, 0) scale(1.1); }
+  100% { transform: translate3d(7%, 4%, 0) scale(1.28); }
+}
+/* Zemin isigi: tahtanin ustunden gecen bulut golgesi. Cok yavas ve cok dusuk
+   kontrast — fark edilmesi degil, hissedilmesi gereken tek efekt bu. */
+@keyframes zeminIsigi {
+  0%   { transform: translate3d(-7%, -5%, 0) scale(1.25); }
+  50%  { transform: translate3d(7%, 5%, 0) scale(1.4); }
+  100% { transform: translate3d(-7%, -5%, 0) scale(1.25); }
+}
 @keyframes combatShake { 0%,100% { transform: translate(0,0); } 10% { transform: translate(-3px,-2px); } 20% { transform: translate(3px,2px); } 30% { transform: translate(-3px,2px); } 40% { transform: translate(3px,-2px); } 50% { transform: translate(-2px,3px); } 60% { transform: translate(2px,-3px); } }
 @keyframes scaleIn { 0% { transform: scale(0.5); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes mysteryGlow { 0%,100% { box-shadow: inset 0 0 3px rgba(16,185,129,0.1); } 50% { box-shadow: inset 0 0 8px rgba(16,185,129,0.3); } }
@@ -20,6 +61,44 @@
 .move-ripple { animation: moveRipple 0.65s ease-out forwards; }
 .forest-mystery { animation: mysteryGlow 2s ease-in-out infinite; }
 .board-active { animation: boardGlow 2s ease-in-out infinite; }
+
+/* Canli tahta. Ormanin sure/gecikme/genligi kare basina inline style ile geliyor
+   (constants.ts -> ormanSavrulmasi); buradaki sure yalnizca yedek deger.
+   will-change YOK: 60+ elemanda zorla katman acmak kazandirdigindan cok bellek
+   yiyor, tarayici zaten calisan transform animasyonunu kendisi terfi ettiriyor. */
+.orman-savrul { animation: sway 7s ease-in-out infinite; transform-origin: bottom center; }
+.orman-sis    { animation: drift 19s ease-in-out infinite; }
+.su-kaustik-1 { animation: kaustik1 11s ease-in-out infinite; }
+.su-kaustik-2 { animation: kaustik2 16s ease-in-out infinite; }
+.su-parilti   { animation: shimmer 6s ease-in-out infinite; }
+.zemin-isik   { animation: zeminIsigi 75s ease-in-out infinite; }
+
+/* Sistem ayari hareketi azaltmaya alinmissa tahta durur, gorunum kalir.
+   YALNIZCA canli tahta siniflari: mevcut animasyonlara dokunulmuyor, ozellikle
+   .move-ripple'a — o 'forwards' ile sonup kayboluyor, durdurulsa halka kalici
+   olarak ekranda kalirdi.
+   SVG su filtresi CSS'ten durdurulamaz; onu LakeOverlay JS tarafinda kapatiyor. */
+@media (prefers-reduced-motion: reduce) {
+  .orman-savrul, .orman-sis, .su-kaustik-1, .su-kaustik-2, .su-parilti, .zemin-isik {
+    animation: none !important;
+  }
+}
+/* Rutbe yazisi. Dolgu rozet KALDIRILDI, yazi dogrudan tahtanin uzerinde duruyor;
+   onu zeminden ayiran tek sey bu koyu hale.
+   Hale SART: yazinin altinda uc ayri sey olabiliyor — satranc deseninin acik
+   karesi (bg-slate-800/35), koyu karesi (/60) ve figurun kendisi. Tek yonlu bir
+   golge bunlarin hepsinde tutmuyor, harfin DORT yaninda da koyuluk gerekiyor.
+   8-10 piksellik yazida text-stroke kullanilamaz: kontur harfin icine yiyip
+   okunmaz hale getiriyor, bu yuzden ust uste text-shadow. */
+.rutbe-yazisi {
+  text-shadow:
+     0  0  3px rgba(0,0,0,0.95),
+     0  1px 2px rgba(0,0,0,1),
+     1px 0  1px rgba(0,0,0,0.9),
+    -1px 0  1px rgba(0,0,0,0.9),
+     0 -1px 1px rgba(0,0,0,0.9);
+}
+
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: rgba(30,41,59,0.5); border-radius: 4px; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.3); border-radius: 4px; }

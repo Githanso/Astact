@@ -54,6 +54,16 @@ const App: React.FC = () => {
     // oyun ekranina gecilmez; yukleme MENUde gizli yapilir, bitince gecis aninda
     // acilir. Boylece oyun ekrani acilirken kareler bos gorunmez.
     const [oyunGorselleriHazir, setOyunGorselleriHazir] = useState(false);
+    // Agaclarin ve gollerin GERCEK yerlesimi sunucudan geldi mi? Arazi her oyunda
+    // sunucuda uretiliyor; gelmeden once tahta LAKE_COORDS/FOREST_COORDS
+    // varsayilanini cizer, yani yanlis bir tahta. Dizilim alani bu bayrak
+    // kalkmadan ACILMAZ.
+    //
+    // Kuruculuk akisi: arazi oda kurulur kurulmaz uretilip room_created ile
+    // geliyor (bkz. server.ts, ikinci oyuncu katilirken artik YENIDEN
+    // uretilmiyor). Kurucu rakibi beklerken ekran MENU'de kaldigi icin bu
+    // hazirlik lobinin arkasinda, kullanici hicbir sey gormeden bitiyor.
+    const [araziHazir, setAraziHazir] = useState(false);
     const [board, setBoard] = useState<BoardState>(createEmptyBoard);
     const [gamePhase, setGamePhase] = useState<GamePhase>('SETUP_RED');
     const [selectedPiece, setSelectedPiece] = useState<PlacedPiece | null>(null);
@@ -190,6 +200,10 @@ const App: React.FC = () => {
         if (yenidenBaglanTimerRef.current !== null) { clearTimeout(yenidenBaglanTimerRef.current); yenidenBaglanTimerRef.current = null; }
         setConnectionNotice(null); setConnectionSec(null); setGameOverReason(null);
         if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+        // Arazi bayragi da INMELI: bir sonraki oda kendi arazisini gonderecek,
+        // bayrak acik kalirsa dizilim alani yeni arazi gelmeden acilir ve bir an
+        // onceki odanin gol/orman yerlesimi gorunur.
+        setAraziHazir(false);
         setIsOnlineMode(false); setRoomCode(null); setMyOnlineTeam(null); setRoomState(null);
         setIsOnlineModalOpen(false); setIsWaitingOpponentSetup(false); setRestartNotice(null); setShowRoomCode(false);
         setMissedTurns({ red: 0, blue: 0 }); setIsDraw(false); setSetupTimeRemaining(null);
@@ -203,7 +217,12 @@ const App: React.FC = () => {
         // seritlerde duruyordu — kayip seritleri combatHistory'den besleniyor.
         setCombatHistory([]); setWinner(null); setRedCaptured([]); setBlueCaptured([]);
         setSelectedPiece(null); setValidMoves([]); setSelectedPieceToPlace(null);
-        setLastMove(null); setLastCombatCoords(null); setScoutTargets([]);
+        // scoutTargets SIFIRLANMAZ, sifirlanamaz: state degil, selectedPiece'ten
+        // turetilen bir useMemo (asagida). Burada setScoutTargets([]) cagriliyordu —
+        // boyle bir setter olmadigi icin ReferenceError firlatiyor ve fonksiyon
+        // setScreen('MENU')'ye hic varamiyordu, yani odadan cikmak calismiyordu.
+        // Ustteki setSelectedPiece(null) zaten memo'yu bosaltiyor.
+        setLastMove(null); setLastCombatCoords(null);
         setScreen('MENU');
     }, []);
 
@@ -234,6 +253,12 @@ const App: React.FC = () => {
         if (gelenArazi && Array.isArray(gelenArazi.lakes)) {
             terrainRef.current = gelenArazi;
             setTerrain(gelenArazi);
+            // Arazi SUNUCUDAN geldi: artik agaclarin ve gollerin gercek yeri
+            // biliniyor. Dizilim alani bu bayrak kalkmadan acilmiyor (asagida,
+            // ekran kapisinda). Oda kuran oyuncu bunu rakibi BEKLERKEN aliyor
+            // (room_created), yani hazirlik lobide arka planda bitiyor ve
+            // dizilim alani acildiginda tahta ilk karede dolu geliyor.
+            setAraziHazir(true);
             // Tahtanın GÖL hücreleri de tazelenmeli. room_started_setup tahtayı
             // yeniden kurmuyor; tazelemezsek dizilim boyunca ekranda VARSAYILAN
             // göller kalır — oyuncu gerçekte göl olmayan kareyi göl sanır.
@@ -967,10 +992,12 @@ const App: React.FC = () => {
 
     // Menude tahta ve panolar hic render edilmez; yalnizca OnlineModal erisilebilir kalir
     // cunku oda kurma/katilma akisi oradan yurutuluyor.
-    // Gorseller hazir degilse de menuye takiliriz: oyun ekrani grafikler yuklenmeden
-    // acilmaz, yoksa kareler bos gorunur. Yukleme gizli oldugu icin kullanici bir
-    // "yukleniyor" gostergesi degil, menuyu gorur; hazir olunca oyun aninda acilir.
-    if (screen === 'MENU' || !oyunGorselleriHazir) {
+    // Gorseller VEYA arazi hazir degilse de menuye takiliriz: dizilim alani
+    // dokular yuklenmeden ve agaclarin/gollerin gercek yerlesimi bilinmeden
+    // ACILMAZ — yoksa kareler once bos gorunur ya da varsayilan (yanlis) gollerle
+    // cizilip sonra degisir. Hazirlik gizli oldugu icin kullanici bir "yukleniyor"
+    // gostergesi degil menuyu/lobiyi gorur; hazir olunca dizilim aninda acilir.
+    if (screen === 'MENU' || !oyunGorselleriHazir || !araziHazir) {
         return (<>
             <MenuScreen lang={lang} onLanguageChange={setLang} onOpenOnline={() => setIsOnlineModalOpen(true)} onOpenSettings={() => setIsMenuSettingsOpen(true)} volume={volume} onVolumeChange={handleVolumeChange} />
             <MenuSettingsModal isOpen={isMenuSettingsOpen} onClose={() => setIsMenuSettingsOpen(false)} timerPreset={timerPreset} onPresetChange={handlePresetChange} lang={lang} />

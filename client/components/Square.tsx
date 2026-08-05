@@ -88,16 +88,19 @@ const Square: React.FC<SquareProps> = ({
         }
     };
 
+    // Koordinat overlay'lere GECIYOR: gol kaustigi bitisik karelerde devam etsin,
+    // orman savrulmasi karelerde ayni fazda olmasin diye ikisi de kare yerini
+    // biliyor olmali.
     if (squareData === 'LAKE') {
-        content = <LakeOverlay />;
+        content = <LakeOverlay row={coords.row} col={coords.col} />;
     } else if (squareData === 'FOREST') {
-        content = <ForestOverlay />;
+        content = <ForestOverlay density={forestDensity} row={coords.row} col={coords.col} />;
     } else if (squareData) {
         content = (
             <div className="relative w-full h-full">
                 {isForest && (
                     <div className="absolute inset-0 z-0 opacity-40">
-                        <ForestOverlay />
+                        <ForestOverlay density={forestDensity} row={coords.row} col={coords.col} />
                     </div>
                 )}
                 <div className="relative z-10 w-full h-full">
@@ -112,7 +115,7 @@ const Square: React.FC<SquareProps> = ({
             </div>
         );
     } else if (isForest) {
-        content = <ForestOverlay />;
+        content = <ForestOverlay density={forestDensity} row={coords.row} col={coords.col} />;
     }
 
     const isLightGrid = (coords.row + coords.col) % 2 === 0;
@@ -136,15 +139,8 @@ const Square: React.FC<SquareProps> = ({
             {/* Base Content */}
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                 {content}
-            </div>            <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden">
-                <img src="/assets/floor.avif" alt="" draggable={false} className="w-full h-full object-cover" />
-                <div className={`absolute inset-0 ${isLightGrid ? 'bg-slate-800/35' : 'bg-slate-800/60'}`} />
             </div>
-            {/* Base Content */}
-            <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-                {content}
-            </div>
-            
+
             {/* Move & Selection Highlights */}
             {isMoveHighlight && (
                 <div className="absolute inset-0 bg-amber-400/30 ring-2 ring-amber-400 z-20 flex items-center justify-center animate-pulse pointer-events-none">

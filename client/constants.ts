@@ -92,12 +92,24 @@ export const PIECE_LABELS: Record<Language, Record<string, string>> = {
 export const getPieceLabel = (name: string, lang: Language): string =>
   PIECE_LABELS[lang]?.[name] ?? PIECE_LABELS.TR[name] ?? name;
 
-// Karakter gorselleri: public/assets/characters/*.svg. Dosya adlari ASCII, tas
+// Karakter gorselleri: public/assets/characters/*.webp. Dosya adlari ASCII, tas
 // adlari Turkce — bu yuzden ACIK bir tablo tutuluyor. Ad uretmeye calismak
 // (toLowerCase + aksan atma) 'İstihkamcı' -> 'i̇stihkamci' gibi tuzaklara dusuyor.
-// Gorseller BUNDLE'A GOMULMUYOR: 14 dosya, 21-70 KB. public/ altindan servis
-// ediliyorlar (wrangler.toml -> directory = "./public"), tarayici bir kez indirip
-// 80 tasin tamaminda yeniden kullaniyor.
+//
+// BICIM NEDEN WEBP: ayni klasordeki .svg dosyalari KAYNAK, servis edilen bicim
+// degil. Onlar gercek vektor degil — 1024x1536 PNG'lerin base64 olarak SVG'ye
+// gomulmus hali (Illustrator export), 14 dosya toplam ~39 MB. base64 kodlama
+// PNG'yi ayrica ~%33 sisiriyor, yani duz PNG'den bile buyukler.
+//
+// .webp dosyalari o SVG'lerin 512x512 viewBox kompozisyonu birebir korunarak
+// 384x384'e indirilmis hali: toplam 230 KB (176 kat kucuk). 384 secildi cunku
+// tas 79 px cizilyor, uzerine gelince (scale-200) 158 px oluyor; 2x ekranda
+// 316 px ediyor, 384 rahat karsiliyor.
+//
+// Gorseller BUNDLE'A GOMULMUYOR: public/ altindan servis ediliyorlar
+// (wrangler.toml -> directory = "./public"), tarayici bir kez indirip 80 tasin
+// tamaminda yeniden kullaniyor. Ayrica menude on yukleniyorlar
+// (lib/preloadAssets.ts): dizilim alani 40 tasla birden aciliyor.
 export const PIECE_ART: Record<string, string> = {
   'Mareşal': 'maresal', 'General': 'general', 'Albay': 'albay', 'Binbaşı': 'binbasi',
   'Yüzbaşı': 'yuzbasi', 'Teğmen': 'tegmen', 'Çavuş': 'cavus', 'Onbaşı': 'onbasi',
@@ -107,7 +119,11 @@ export const PIECE_ART: Record<string, string> = {
 
 /** Tasin karakter gorselinin yolu. Bilinmeyen ad gelirse null. */
 export const getPieceArt = (name: string): string | null =>
-  PIECE_ART[name] ? `/assets/characters/${PIECE_ART[name]}.svg` : null;
+  PIECE_ART[name] ? `/assets/characters/${PIECE_ART[name]}.webp` : null;
+
+/** On yukleyicinin kullandigi tam liste (14 karakter gorseli). */
+export const KARAKTER_GORSELLERI: string[] =
+  Object.values(PIECE_ART).map(ad => `/assets/characters/${ad}.webp`);
 
 // GECICI — tas stili denemesi. Varsayilan 'sade': taraf arka plani hic yok, figur
 // kareyi maksimum dolduruyor, taraf rengi yalnizca alttaki rutbe rozetinde.
@@ -118,6 +134,42 @@ export const TAS_STILI: 'sade' | 'disk' =
   typeof location !== 'undefined' && new URLSearchParams(location.search).get('stil') === 'disk'
     ? 'disk'
     : 'sade';
+
+// Canli tahta: gol dalgalanir, orman savrulur, zeminde yavas bir isik gezer.
+// VARSAYILAN ACIK; ?canli=0 ile kapanip bugunku durgun tahtaya donuluyor —
+// ayni sekmede yan yana karsilastirma icin. TAS_STILI ile ayni kalip.
+export const CANLI: boolean =
+  typeof location === 'undefined' || new URLSearchParams(location.search).get('canli') !== '0';
+
+// Sistem ayari hareketi azaltmaya alinmis mi. CSS animasyonlarini medya sorgusu
+// zaten durduruyor (index.css); bu sabit CSS'in ULASAMADIGI yer icin var:
+// goldeki SVG bozunum filtresi SMIL ile suruluyor ve medya sorgusuyla
+// durdurulamiyor, JS tarafinda hic baglanmiyor.
+export const HAREKET_AZALT: boolean =
+  typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Orman savrulmasinin faz dagitimi. 30 orman karesi AYNI ANDA sallanirsa tahta
+// nefes alan tek kutleye donuyor ve goz bunu aninda sahte olarak okuyor; kareler
+// birbirinden bagimsiz kaymali.
+//
+// Rastgelelik KULLANILAMAZ: iki oyuncu ayni tahtayi goruyor, Math.random() iki
+// istemcide iki farkli orman uretirdi. Bunun yerine kare koordinati ve sunucudan
+// gelen yogunluk (server.ts:173) bir tam sayiya karistirilip oradan turetiliyor —
+// dagilim duzensiz ama deterministik.
+//
+// Yogunluk 1-3 arasi. Sik orman DAHA AGIR savruluyor: genlik dusuk, sure uzun.
+export const ormanSavrulmasi = (row: number, col: number, density: number) => {
+  const karisim = (row * 7 + col * 13 + density * 29) % 20;   // 0..19
+  const yogunluk = Math.min(3, Math.max(1, density));
+  return {
+    // Sure 5.2s - 8.8s. Yogunluk arttikca uzuyor (agir kutle yavas savrulur).
+    sure: 5.2 + karisim * 0.18 + yogunluk * 0.4,
+    // Gecikme 0 - 4.75s: komsu kareler ayni fazda baslamiyor.
+    gecikme: (karisim % 20) * 0.25,
+    // Genlik carpani 0.55 - 1.0. Seyrek orman daha serbest savruluyor.
+    genlik: (1.05 - yogunluk * 0.15).toFixed(2),
+  };
+};
 
 
 // Oyuncu basina TAM 40 tas — dizilim alani 4 sutun x 10 satir = 40 kare, bosluk

@@ -42,18 +42,30 @@ const Piece: React.FC<PieceProps> = ({ piece, isOpponent, onDragStart, lang = 'T
     // Arka plan olmadigi icin figuru zeminden ayiran tek sey bu golge.
     const figurGolgesi = 'drop-shadow-[0_2px_3px_rgba(0,0,0,0.95)]';
 
-    // Taraf rengi artik yalnizca rutbe rozetinde yasiyor. Rozetin TAMAMI renk,
-    // yazi beyaz: yalnizca harflerin renkli oldugu hale gore taraf ayrimi cok daha
-    // guclu okunuyor. Yazinin dogrudan zemin dokusuna dusmemesi de sart — satranc
-    // deseninin acik (bg-slate-800/35) ve koyu (/60) kareleri arasinda farkli
-    // okunurdu; dolu rozet bu farki tamamen ortadan kaldiriyor.
+    // TARAF AYNALAMASI. Tek bir karakter seti var ve figurlerin hepsi SOLA bakiyor
+    // (karakter brief'i: "hepsi ayni yone bakar, karsi taraf yatay aynalama ile
+    // elde edilir — ikinci set uretilmez").
     //
-    // Ton 700, 600 DEGIL: 8 piksellik yazida beyaz, red-600 (#dc2626) uzerinde
-    // sinirda kaliyor; red-700 (#b91c1c) ve blue-700 (#1d4ed8) rahat okunuyor.
-    // ring: koyu rozeti tahtanin koyu zemininden ayiriyor.
-    const rozetRengi = isRed
-        ? 'bg-red-700 text-white ring-1 ring-white/25'
-        : 'bg-blue-700 text-white ring-1 ring-white/25';
+    // Tahtada kirmizi SAG sutunlarda (7-10), mavi SOL sutunlarda (0-3) duruyor ve
+    // ikisi karsi karsiya. Sola bakan figur kirmizida zaten dusmani gosteriyor;
+    // aynalanmasi gereken MAVI, yoksa kendi kalesine bakiyor.
+    //
+    // Olcut owner, bakis acisi DEGIL: tahta perspektife gore donmuyor (Board.tsx),
+    // mavi her iki oyuncunun ekraninda da solda duruyor.
+    const figurYonu = isRed ? '' : ' -scale-x-100';
+
+    // Taraf rengi HARFLERIN kendisinde: dolgu rozet kaldirildi, arka plan yok.
+    //
+    // Dolgu rozetin bir isi vardi — yazi dogrudan zemine dustugunde satranc
+    // deseninin acik (bg-slate-800/35) ve koyu (/60) kareleri arasinda farkli
+    // okunuyor, altina figur de girebiliyordu. Rozet gidince o isi .rutbe-yazisi
+    // halesi ustleniyor (index.css): harfin dort yaninda koyuluk.
+    //
+    // Ton 300, 500/600 DEGIL: dolgunun uzerinde beyaz yaziyi tasiyan koyu tonlar
+    // (red-700/blue-700) burada TERSINE calisirdi — koyu harf koyu tahtada
+    // kaybolur. Acik tonlar koyu halenin uzerinde rahat okunuyor ve kirmizi/mavi
+    // ayrimi uzaktan da tutuyor.
+    const rozetRengi = isRed ? 'text-red-300' : 'text-sky-300';
 
     return (
         <div
@@ -83,16 +95,20 @@ const Piece: React.FC<PieceProps> = ({ piece, isOpponent, onDragStart, lang = 'T
                     bindirilince figur %22 buyudu. object-contain orani koruyor. */}
                 <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                     {art
-                        ? <img src={art} alt="" draggable={false} className={`max-h-full max-w-full object-contain ${figurGolgesi}`} />
+                        ? <img src={art} alt="" draggable={false} className={`max-h-full max-w-full object-contain ${figurGolgesi}${figurYonu}`} />
                         : <Shield className={`w-5 h-5 ${isRed ? 'text-red-400' : 'text-blue-400'} ${figurGolgesi}`} />}
                 </div>
 
-                {/* Rutbe rozeti: figurun alt kenarina BINIYOR. Ortulen yer omuz/gogus
+                {/* Rutbe yazisi: figurun alt kenarina BINIYOR. Ortulen yer omuz/gogus
                     hizasi — yuz, baslik ve rutbe isaretleri ustte kaliyor. Rutbe
                     tanima oyunun temeli, figur tek basina yeterli degil (ozellikle
                     birbirine benzeyen subay rutbelerinde).
-                    z-10 sart: yoksa figurun altina duser. */}
-                <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 z-10 max-w-full truncate rounded-[3px] px-[2px] text-[10px] font-black leading-[1.25] tracking-tight shadow-[0_1px_2px_rgba(0,0,0,0.85)] ${rozetRengi}`}>
+                    z-10 sart: yoksa figurun altina duser.
+                    Arka plan yok; rounded/px/ring/shadow ile birlikte kaldirildi —
+                    hepsi rozetin kutusuna aitti. Okunurlugu .rutbe-yazisi tasiyor.
+                    Kutu golgesi (shadow-*) ozellikle gitmeli: kutu olmayinca
+                    gorunmez bir dikdortgene golge dusurmeye devam ediyordu. */}
+                <span className={`rutbe-yazisi absolute bottom-0 left-1/2 -translate-x-1/2 z-10 max-w-full truncate text-[10px] font-black leading-[1.25] tracking-tight ${rozetRengi}`}>
                     {label}
                 </span>
             </div>

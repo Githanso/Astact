@@ -686,15 +686,21 @@ export class GameRoom extends DurableObject {
         // Oda artik doldu: kod bu andan itibaren tek seferlik. Ayrilan oyuncunun
         // slotu boşalmayacak, yerine 3. kisi giremeyecek (bkz. leave_room).
         room.locked = true;
-        // Arazi tam BURADA uretiliyor: oyuncular dizilim yaparken tahtayi
-        // gormeli. Daha erken uretmek (oda kurulurken) yanlis olmazdi ama daha
-        // gec uretmek — orn. oyun baslarken — dizilimi ezberden yaptirirdi.
-        // ?seed=... verilirse o tohumla uretilir. Arazi setup_complete'ten ONCE
-        // uretildigi icin seed'i mesajla almak gec kalirdi; baglanti URL'i tek
-        // makul yol. Pratikte yalnizca TESTLER kullaniyor: sabit tohum = sabit
-        // tahta, boylece orman/gol koordinatina dayanan senaryolar yazilabiliyor.
-        const seedParam = Number(url.searchParams.get("seed"));
-        this.araziYenile(Number.isFinite(seedParam) && url.searchParams.get("seed") ? seedParam : undefined);
+        // ARAZI BURADA YENIDEN URETILMEZ. Oda kurulurken zaten uretildi
+        // (yukarida, araziYenile()) ve room_created ile kurucuya gonderildi.
+        // Burada bir kez daha uretmek o araziyi CÖPE atiyordu: kurucu rakip
+        // beklerken elindeki gol/orman yerlesimi, dizilim acildiginda gordugu
+        // yerlesim DEGILDI. Istemci de bu yuzden bekleme suresince tahtayi
+        // onceden hazirlayamiyordu — hazirlayacagi arazi yanlis olurdu.
+        //
+        // ?seed=... verilmisse YINE de yeniden uretiliyor: sabit tohum = sabit
+        // tahta, orman/gol koordinatina dayanan test senaryolari buna bagli.
+        // Tohum baglanti URL'inden geliyor (mesajla almak gec kalirdi) ve
+        // testler ikinci oyuncunun baglantisinda da geciriyor, o yuzden bu dal
+        // testlerde eskisi gibi calisiyor. Pratikte yalnizca testler kullaniyor.
+        const seedHam = url.searchParams.get("seed");
+        const seedParam = Number(seedHam);
+        if (seedHam && Number.isFinite(seedParam)) this.araziYenile(seedParam);
         // Dizilim saati burada kuruluyor: ikinci oyuncu katilip faz SETUP'a
         // cekildigi AN baslar. Sure dolunca alarm() hazir olmayani rastgele dizer.
         room.setupDeadline = Date.now() + room.setupTimeMs;
