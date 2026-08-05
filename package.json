@@ -18,6 +18,7 @@
     "test:carpisma": "node test/carpisma-testi.mjs",
     "test:izci": "node test/izci-testi.mjs",
     "test:sayim": "node test/tas-sayimi-testi.mjs",
+    "test:dagilim": "node test/tas-dagilimi-testi.mjs",
     "test:dizilim-saati": "node test/dizilim-saati-testi.mjs",
     "test:serbest-hamle": "node test/serbest-hamle-testi.mjs",
     "test:oda-terk": "node test/oda-terk-testi.mjs",

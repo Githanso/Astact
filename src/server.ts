@@ -286,11 +286,12 @@ const SUNUCU_TAS_TANIMLARI: Record<string, { rank: number; special: string | nul
   "Sancak": { rank: 0, special: null, movable: false },
 };
 const SUNUCU_TAS_SAYILARI: Record<string, number> = {
-  "Mareşal": 1, "General": 1, "Albay": 2, "Binbaşı": 3, "Yüzbaşı": 4,
-  // Er 3 (4 degil): toplam 41 idi, dizilim alani 40 kare — fazla tas her oyunda
-  // sessizce dusuyordu. Istemcideki PIECE_COUNTS ile BIREBIR ayni kalmali.
-  "Teğmen": 4, "Çavuş": 4, "Onbaşı": 4, "Er": 3,
-  "Keşifçi": 2, "İstihkamcı": 5, "Casus": 1, "Mayın": 5, "Sancak": 1,
+  "Mareşal": 1, "General": 1, "Albay": 2, "Binbaşı": 2, "Yüzbaşı": 3,
+  // TOPLAM 40 OLMALI: dizilim alani 4 sutun x 10 satir = 40 kare, fazla tas her
+  // oyunda sessizce dusuyor (rastgeleDizilimUret bos kare kalmayinca kalani
+  // atiyor). Istemcideki PIECE_COUNTS ile BIREBIR ayni kalmali.
+  "Teğmen": 3, "Çavuş": 3, "Onbaşı": 3, "Er": 7,
+  "Keşifçi": 2, "İstihkamcı": 5, "Casus": 1, "Mayın": 6, "Sancak": 1,
 };
 
 // Fisher-Yates. `sort(() => Math.random() - 0.5)` YETMIYOR: karsilastirma

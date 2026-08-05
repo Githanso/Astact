@@ -179,23 +179,24 @@ export const PIECE_COUNTS: { [key: string]: number } = {
   'Mareşal': 1,
   'General': 1,
   'Albay': 2,
-  'Binbaşı': 3,
-  'Yüzbaşı': 4,
-  'Teğmen': 4,
-  'Çavuş': 4,
-  'Onbaşı': 4,
-  // Er 3: tablo bir ara 41'e cikmis, dizilim alani ise 40 kare. Fazla tas her
-  // oyunda sessizce dusuyordu (rastgele dizilim 40 kareyi doldurup kalani atiyor,
-  // hangi tasin dustugu karistirma sirasina bagli) — "bir tasim eksik" hatasi
-  // buradan geliyordu. Ozel yetenekli taslarin dengesine dokunmamak icin fazlalik
-  // en jenerik piyadeden alindi.
-  'Er': 3,
+  // Orta rutbelerin (Binbasi, Yuzbasi, Tegmen, Cavus, Onbasi) her birinden bir
+  // tane alindi; cikan 5 tasin 4'u Er'e, 1'i Mayın'a gitti. Toplam yine 40.
+  'Binbaşı': 2,
+  'Yüzbaşı': 3,
+  'Teğmen': 3,
+  'Çavuş': 3,
+  'Onbaşı': 3,
+  // Er 7 (eskiden 3): tablonun en kalabalik tasi. Toplam 40'i asmamali — dizilim alani 4
+  // sutun x 10 satir = 40 kare ve fazla tas her oyunda SESSIZCE dusuyor
+  // (rastgele dizilim 40 kareyi doldurup kalani atiyor, hangi tasin dustugu
+  // karistirma sirasina bagli). "Bir tasim eksik" hatasi buradan gelmisti.
+  'Er': 7,
   // Izci sayisi 2: artik siradan bir tas degil, ISTIHBARAT kaynagi. Ilk kullanim
   // bedava, sonrasi SCOUT_COOLDOWN turluk bekleme (bkz. server.ts "scout").
   'Keşifçi': 2,
   'İstihkamcı': 5,
   'Casus': 1,
-  'Mayın': 5, // 5 Mayın
+  'Mayın': 6, // 6 Mayın
   'Sancak': 1,
 };
 

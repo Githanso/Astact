@@ -36,6 +36,7 @@ npm run test:oda-ayar  # dev sunucusu ayaktayken, ~50sn (tur suresi senkronu + o
 npm run test:yeniden-baslat # dev sunucusu ayaktayken, ~2.5dk (rovans akisi + sayac sifirlama)
 npm run test:carpisma  # dev sunucusu ayaktayken, ~1dk (carpisma kurallari + bilgi sizintisi)
 npm run test:izci      # dev sunucusu ayaktayken, ~20sn (Izci gorevi + istihbarat gizliligi)
+npm run test:dagilim   # dev sunucusu ayaktayken, ~10sn (tas dagilimi: iki tablo + sunucu)
 ```
 
 Testler varsayilan olarak `ws://127.0.0.1:8787`'e baglanir; canliya karsi kosmak icin
@@ -1581,6 +1582,58 @@ ettiğinden farklı olurdu.
 
 Dört dildeki kural metni ve artık hiç gönderilmeyen `errBACKWARD` çeviri anahtarı da
 temizlendi.
+
+### Taş dağılımı değişti: orta rütbeler inceldi, Er ve Mayın arttı
+
+| Rütbe | Eski | Yeni |  | Rütbe | Eski | Yeni |
+|---|---|---|---|---|---|---|
+| Mareşal | 1 | 1 |  | Er | **3** | **7** |
+| General | 1 | 1 |  | Keşifçi | 2 | 2 |
+| Albay | 2 | 2 |  | İstihkamcı | 5 | 5 |
+| Binbaşı | **3** | **2** |  | Casus | 1 | 1 |
+| Yüzbaşı | **4** | **3** |  | Mayın | **5** | **6** |
+| Teğmen | **4** | **3** |  | Sancak | 1 | 1 |
+| Çavuş | **4** | **3** |  | | | |
+| Onbaşı | **4** | **3** |  | **Toplam** | **40** | **40** |
+
+Orta rütbelerin (Binbaşı → Onbaşı) her birinden bir tane alındı; çıkan 5 taşın 4'ü Er'e,
+1'i Mayın'a gitti.
+
+**Gerekçe kayda geçmedi.** Dağılım hazır bir tablo olarak verildi, dengeye dair bir sebep
+belirtilmedi — bu yüzden burada da uydurulmuyor. Oyun içi etkisi denenerek görülecek.
+
+**Toplam 40 olmak zorunda.** Dizilim alanı 4 sütun × 10 satır = 40 kare. Tablo 40'ı aşarsa
+fazla taş her oyunda **sessizce düşüyor**: `rastgeleDizilimUret` boş kare kalmayınca kalanı
+atıyor ve hangi taşın düştüğü karıştırma sırasına bağlı oluyor. "Bir taşım eksik" hatası
+daha önce tam olarak buradan gelmişti (Er 4 iken toplam 41'di).
+
+Tablo **iki yerde** yazılı ve ayrışmamalı: `client/constants.ts` → `PIECE_COUNTS` ve
+`src/server.ts` → `SUNUCU_TAS_SAYILARI`. Sunucununki dizilim süresi dolduğunda kalan
+taşları dizerken kullanılıyor; yalnızca istemci güncellenseydi oyuncunun elindeki havuz ile
+sunucunun dizdiği taşlar farklı olurdu.
+
+Başka hiçbir yere dokunulmadı, gerekmedi: `TOPLAM_TAS`, dizilim havuzu
+(`createInitialPiecePool`), kurallar panelindeki `×N` sütunu, kayıp şeritleri ve seçim
+rozeti hepsi bu tek tablodan türüyor.
+
+**Doğrulama.** İki tablo programlı karşılaştırıldı (14 tür, 0 ayrışma, iki tarafta da toplam
+40). Canlı sunucuda `?setupMs=` ile dizilim süresi doldurulup taşları sunucuya dizdirildi:
+iki oyuncu da tam olarak yeni dağılımı aldı. `typecheck`, `test:protokol`,
+`test:dizilim-saati`, `test:sayim` geçti; kurallar paneli tarayıcıda yeni sayıları
+gösteriyor.
+
+**Kalıcı test eklendi** (`npm run test:dagilim`). Bu boşluk gerçekti: hiçbir test dağılımın
+kendisini denetlemiyordu, `test:dizilim-saati` yalnızca "40 taş var" diyor — toplamı 40
+tutan yanlış bir tablo (örneğin Er 6 / Mayın 7) mevcut testlerin **hepsinden** geçerdi.
+Yeni test iki şeye bakıyor: (1) iki tablo birebir aynı mı ve toplamları 40 mı, (2) dizilim
+süresi dolunca sunucunun gerçekten dizdiği taşlar tabloyla uyuşuyor mu.
+
+Test **sayı ezberlemiyor**: beklenen dağılımı koddaki tablodan okuyor, yani sayılar bir daha
+değiştiğinde testi güncellemek gerekmiyor — denetlediği şey "iki tablo ve sunucunun
+davranışı birbiriyle tutarlı mı" sorusu.
+
+Testin yakaladığı doğrulandı: sunucu tablosunda Er geçici olarak 6'ya çekildiğinde altı
+kontrol birden düştü ve sunucu tahtaya **39 taş** dizdi — sessiz hatanın gerçek sonucu.
 
 ## Higgsfield sürümünden ayrılan noktalar
 
